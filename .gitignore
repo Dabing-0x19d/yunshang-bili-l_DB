@@ -1,0 +1,47 @@
+# ── 依赖与构建产物 ──
+/node_modules
+/oh_modules
+**/build
+/.hvigor
+/.cxx
+/.appanalyzer
+**/.test
+/.clangd
+/.clang-format
+/.clang-tidy
+
+# ── IDE 与工具本地数据 ──
+/.idea
+/.deveco
+/.codegraph
+/.vscode
+/local.properties
+
+# ── 签名凭据（切勿提交）──
+# 应用签名密钥库与证书属于个人凭据，一旦泄露可被用于签署冒名应用。
+sign/
+*.p12
+*.p7b
+*.csr
+*.cer
+*.jks
+*.keystore
+
+# ── 本地调试产物（日志 / 截图 / UI dump / 崩溃转储）──
+/_*
+!_start.bat
+*.log
+*.dmp
+*.patch
+/_archive/
+
+# ── AI 工具与会话数据 ──
+/.workbuddy/
+/.zcode/
+/.codeartsdoer/
+/.atomcode/
+/.merkle-snapshot.json
+
+# ── 本地设计稿与临时图 ──
+/design-refs/
+/generated-images/
