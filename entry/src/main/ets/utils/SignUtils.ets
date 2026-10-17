@@ -279,9 +279,8 @@ export class AppSign {
   /**
    * 官方 App key 和 secret
    *
-   * ⚠️ 本项目出于法律合规考虑【不提供】B 站官方客户端密钥的真实值。
-   * 请自行抓包获取后填入对应平台的 appkey / appsec，否则 App 端接口会签名失败。
-   * 签名算法本身是完整可用的（generateSign / signParams / generateMobileParams），填入即生效。
+   * 本仓库【不附带】任何真实的客户端凭据值，需构建者自行准备。
+   * 签名算法本身完整可用（generateSign / signParams / generateMobileParams），填入即生效。
    */
   static readonly APP_KEYS: Record<string, AppKeyConfig> = {
     'android': {

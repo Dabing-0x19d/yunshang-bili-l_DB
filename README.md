@@ -3,13 +3,13 @@
 一个基于 HarmonyOS / ArkTS 的第三方 bilibili 客户端，用于学习 **ArkTS 声明式 UI、Stage 模型、自定义渲染与流媒体播放** 的工程实践。
 
 > ⚠️ **本项目为非官方的第三方实现，与 bilibili 官方无任何关联，也未获得其授权。**
-> 项目名称、图标、界面均为独立设计，**不包含** bilibili 的商标或官方素材。
+> 项目名称与图标均为独立设计，**不包含** bilibili 的商标或官方素材。
 
 ---
 
 ## 一、重要声明（请先阅读）
 
-### 1. 本项目不提供任何 API 密钥
+### 1. 本仓库不附带任何真实凭据
 
 代码中的 B 站客户端签名相关常量**已被置为占位符**：
 
@@ -18,9 +18,7 @@
 | `entry/src/main/ets/utils/SignUtils.ets` | `AppSign.APP_KEYS` |
 | `entry/src/main/ets/api/RecommendApiOptimized.ets` | `APP_KEY` / `APP_SEC` |
 
-**签名算法本身是完整可用的**，你需要自行抓包获取并填入后，App 端接口才会正常工作。
-
-不提供密钥的原因：这些凭据属于 B 站私有 API 的认证信息，随项目公开发布可能构成对其技术措施的不当规避。
+**签名算法本身完整保留**，但仓库不附带任何真实凭据值。若你需要调用相关接口，请自行准备合规的凭据。
 
 ### 2. 关于「仅供学习」
 
@@ -34,11 +32,8 @@
 
 ### 3. 默认登录方式已调整为 Web 扫码
 
-为让开源版本**开箱即用、无需密钥即可登录**，`QrCodeLoginPage` 的 `isTvMode` 默认值设为 `false`，
+为让开源版本**开箱即用、无需额外凭据即可登录**，`QrCodeLoginPage` 的 `isTvMode` 默认值设为 `false`，
 走公开接口 `passport.bilibili.com/x/passport-login/web/qrcode`。
-
-TV 登录（可获取 `access_key`、解锁个性化推荐）的代码**完整保留**，
-填入密钥后将 `isTvMode` 改回 `true` 即可启用。
 
 ---
 
@@ -68,7 +63,7 @@ TV 登录（可获取 `access_key`、解锁个性化推荐）的代码**完整�
 
 1. 用 DevEco Studio 打开本目录，等待依赖同步完成
 2. **配置签名**：`File → Project Structure → Signing Configs`，使用你自己的证书
-   （仓库内的 `build-profile.json5` 已清空 `signingConfigs`，避免泄露个人签名口令）
+   （仓库内的 `build-profile.json5` 未包含签名配置，构建者需自行配置）
 3. 连接设备或启动模拟器
 4. `Build → Build Hap(s)/APP(s) → Build APP(s)`，或直接运行
 
@@ -123,5 +118,5 @@ docs/                     设计与排查文档
 
 本项目自身代码使用 **MIT License**，详见 [LICENSE](LICENSE)。
 
-> 若你 fork 后重新填入了 API 密钥、打包或分发应用，相关行为由你自行负责，
-> 与本仓库作者无关。
+> 本仓库按「原样」提供，不提供任何真实凭据。
+> 使用者基于本仓库进行二次开发、打包或分发的行为，由使用者自行负责，与本仓库作者无关。

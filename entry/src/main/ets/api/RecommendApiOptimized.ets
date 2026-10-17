@@ -25,9 +25,8 @@ function getBiliMid(cookie: string): string {
 /**
  * android_hd 的 appkey / appsec
  *
- * ⚠️ 本项目出于法律合规考虑【不提供】B 站官方客户端密钥的真实值。
- * 请自行抓包获取后填入下方两个常量，否则 App 端推荐接口会签名失败。
- * 签名算法本身是完整可用的（见 computeAppSign），填入即生效。
+ * 本仓库【不附带】任何真实的客户端凭据值，需构建者自行准备。
+ * 签名算法本身完整可用（见 computeAppSign），填入即生效。
  */
 const APP_KEY = 'YOUR_APPKEY_HERE';
 const APP_SEC = 'YOUR_APPSEC_HERE';

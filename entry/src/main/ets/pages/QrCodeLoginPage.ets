@@ -22,8 +22,7 @@ struct QrCodeLoginPage {
   @State isExpired: boolean = false;
   @State isSuccess: boolean = false;
   // 开源版默认走 Web 扫码登录：该路径使用公开接口（passport-login/web/qrcode），
-  // 不需要 B 站官方 appkey/appsec。若已填入 SignUtils.APP_KEYS 的真实值，
-  // 可改回 true 启用 TV 登录（能拿到 access_key，解锁个性化推荐）。
+  // 无需额外凭据即可使用。
   @State isTvMode: boolean = false;
   @State showNotice: boolean = true;
   private qrcodeKey: string = '';
