@@ -49,6 +49,16 @@
 
 详见 [docs/功能清单.md](docs/功能清单.md)。
 
+### 界面预览
+
+| 播放页（竖屏 / 横屏） | 首页（竖屏 / 横屏） |
+|:---:|:---:|
+| ![播放页-竖屏](docs/screenshots/player-portrait.jpg) | ![首页-竖屏](docs/screenshots/home-portrait.jpg) |
+| ![播放页-横屏](docs/screenshots/player-landscape.jpg) | ![首页-横屏](docs/screenshots/home-landscape.jpg) |
+
+> 截图中的视频画面、封面、弹幕与「bilibili」字样水印均来自 bilibili 平台的内容，
+> 版权归其原作者 / bilibili 所有，仅作界面演示之用。
+
 ---
 
 ## 三、构建
