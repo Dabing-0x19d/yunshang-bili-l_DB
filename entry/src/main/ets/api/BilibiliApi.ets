@@ -2730,7 +2730,7 @@ async function tryFetchPlayUrlMobile(bvid: string, cid: number, qn: number, fnva
       const response = await httpRequest.request(url, {
         method: http.RequestMethod.GET,
         header: {
-          'User-Agent': 'Mozilla/5.0 BiliDroid/7.67.0 (bbcallen@gmail.com) os/android model/ONEPLUS A6000 mobi_app/android build/6740300 channel/bili',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Referer': 'https://www.bilibili.com/',
           'Origin': 'https://www.bilibili.com',
           'Cookie': getCookieHeader(),
@@ -3961,7 +3961,7 @@ export async function uploadCommentImage(filePath: string, mimeType: string, ext
         'Content-Type': `multipart/form-data; boundary=${boundary}`,
         'Cookie': cookie,
         'Referer': 'https://www.bilibili.com/video/',
-        'User-Agent': 'Mozilla/5.0 BiliDroid/7.67.0 (bbcallen@gmail.com) os/android model/ONEPLUS A6000 mobi_app/android build/6740300 channel/bili'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
       },
       extraData: body.buffer,
       connectTimeout: 15000,

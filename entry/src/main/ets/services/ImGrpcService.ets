@@ -371,8 +371,7 @@ export class ImGrpcService {
         'Accept-Encoding': 'identity',
         // ⚠️ B 站 app gRPC 网关用 authorization: identify_v1 <access_key> 认证（-101 未登录根因）
         'Authorization': `identify_v1 ${ImGrpcService.getAccessKey()}`,
-        // ⚠️ app 网关要求 BiliDroid UA（浏览器 UA 会被识别为未登录）
-        'User-Agent': 'Mozilla/5.0 BiliDroid/7.67.0 (bbcallen@gmail.com) os/android model/ONEPLUS A6000 mobi_app/android build/6740300 channel/bili',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Referer': 'https://www.bilibili.com/',
         'Cookie': ImGrpcService.getCookieHeader(),
         // ⚠️ app 网关设备头（-663 风控根因：缺设备指纹）
@@ -542,7 +541,7 @@ export class ImGrpcService {
           'Content-Type': `multipart/form-data; boundary=${boundary}`,
           'Cookie': cookie,
           'Referer': 'https://www.bilibili.com/',
-          'User-Agent': 'Mozilla/5.0 BiliDroid/7.67.0 (bbcallen@gmail.com) os/android model/ONEPLUS A6000 mobi_app/android build/6740300 channel/bili'
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         },
         extraData: body.buffer,
         connectTimeout: 15000,

@@ -257,13 +257,16 @@ export class WbiSign {
       logError(`[WbiSign] 获取密钥异常: ${e}`);
     }
 
-    // 回退：优先用缓存，其次用硬编码默认值
+    // 回退：优先用缓存，其次用占位符
+    // 说明：WBI 密钥本应由上方 getWbiKeys() 从 /x/web-interface/nav 动态获取
+    // （该接口为公开接口，见第 238-250 行）。此处仅为网络失败时的兜底值，
+    // 已置为占位符；填入真实值或等待网络恢复后自动获取即可。
     if (WbiSign.cachedKeys) {
       return WbiSign.cachedKeys;
     }
     return {
-      img_key: '7cd084941338484aae1ad9425b84077c',
-      sub_key: '4932caff0ff746eab6f01bf08b70ac45'
+      img_key: 'YOUR_WBI_IMG_KEY_HERE',
+      sub_key: 'YOUR_WBI_SUB_KEY_HERE'
     } as WbiKeys;
   }
 }

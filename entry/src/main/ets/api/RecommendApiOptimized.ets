@@ -201,7 +201,7 @@ export async function getRecommendVideosOptimized(
 
     // ⭐ 4. 设置请求头
     const headers: Record<string, string> = {
-      'User-Agent': 'Mozilla/5.0 BiliDroid/2.0.1 (bbcallen@gmail.com) os/android model/android_hd mobi_app/android_hd build/2001100 channel/master innerVer/2001100 osVer/15 network/2',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'Referer': 'https://www.bilibili.com/',
       'buvid': buvid,
       'fp_local': '1111111111111111111111111111111111111111111111111111111111111111',

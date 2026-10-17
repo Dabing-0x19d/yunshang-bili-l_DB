@@ -543,7 +543,7 @@ export class UserBehaviorService {
       // ===== App API 请求（like/coin走app.bilibili.com） =====
       if (useApp) {
         const appHeaders: Record<string, string> = {
-          'User-Agent': 'Mozilla/5.0 BiliDroid/7.67.0 (bbcallen@gmail.com) os/android model/ONEPLUS A6000 mobi_app/android build/6740300 channel/bili',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Content-Type': 'application/x-www-form-urlencoded',
           'env': 'prod',
           'app-key': 'android64',
@@ -846,7 +846,7 @@ export class UserBehaviorService {
             {
               method: http.RequestMethod.GET,
               header: {
-                'User-Agent': 'Mozilla/5.0 BiliDroid/7.67.0 (bbcallen@gmail.com) os/android model/ONEPLUS A6000 mobi_app/android build/6740300 channel/bili',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Referer': 'https://www.bilibili.com/',
               },
               connectTimeout: 10000,
