@@ -1,6 +1,18 @@
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/logo-dark.png">
+    <img src="docs/logo-light.png" alt="云上太学" width="160">
+  </picture>
+
 # 云上太学
 
-一个基于 HarmonyOS / ArkTS 的第三方 bilibili 客户端，用于学习 **ArkTS 声明式 UI、Stage 模型、自定义渲染与流媒体播放** 的工程实践。
+**一个基于 HarmonyOS / ArkTS 的第三方 bilibili 客户端**，用于学习 ArkTS 声明式 UI、Stage 模型、自定义渲染与流媒体播放的工程实践。
+
+`HarmonyOS` `ArkTS` `bilibili` `第三方客户端`
+
+---
+
+</div>
 
 > ⚠️ **本项目为非官方的第三方实现，与 bilibili 官方无任何关联，也未获得其授权。**
 > 项目名称与图标均为独立设计，**不包含** bilibili 的商标或官方素材。
