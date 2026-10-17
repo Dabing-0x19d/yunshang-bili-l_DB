@@ -100,12 +100,28 @@ docs/                     设计与排查文档
 
 ---
 
-## 五、致谢与许可
+## 五、第三方代码声明
 
-本项目在开发过程中**参考**了 [PiliPlus](https://github.com/qinshah/PiliPlus) 的接口设计与参数处理方式，
-但其为 Dart/Flutter 实现，本项目为 ArkTS 重写，**未复制其源码**，因此本仓库采用 MIT 许可发布。
+本项目包含以下**源自第三方**的组件，均已在文件头注明来源，各自的许可条款优先于本项目的 MIT：
 
-本项目使用 **MIT License**，详见 [LICENSE](LICENSE)。
+| 文件 | 来源 | 许可 |
+|---|---|---|
+| `entry/src/main/ets/components/infra/HdsMiniBarButton.ets` | `ceshi/HdsButton_Component-main`（SummerKaze） | Apache-2.0 |
+| `entry/src/main/ets/components/HdsTitleBarSegment.ets` | `DeadlinerNEXT/DeadlinerNEXT` | 参见其上游仓库 |
+
+> `DeadlinerNEXT` 上游仓库在整理本文档时已无法访问（404）。
+> 若你是该组件的作者或知晓其许可条款，请通过 Issue 联系，
+> 我将按你的要求补充声明或移除该组件。
+
+其余代码均为本项目独立实现。开发过程中**参考**了
+[PiliPlus](https://github.com/qinshah/PiliPlus) 的接口设计与参数处理方式，
+但其为 Dart/Flutter 实现，本项目为 ArkTS 重写，**未复制其源码**。
+
+---
+
+## 六、许可
+
+本项目自身代码使用 **MIT License**，详见 [LICENSE](LICENSE)。
 
 > 若你 fork 后重新填入了 API 密钥、打包或分发应用，相关行为由你自行负责，
 > 与本仓库作者无关。
