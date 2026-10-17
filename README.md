@@ -1,8 +1,5 @@
 <div align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/logo-dark.png">
-    <img src="docs/logo-light.png" alt="云上太学" width="160">
-  </picture>
+  <img src="docs/logo.png" alt="云上太学" width="160">
 
 # 云上太学
 
