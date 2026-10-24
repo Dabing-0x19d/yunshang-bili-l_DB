@@ -736,7 +736,7 @@ struct UpSpacePage {
         // ── 吸顶节标题替身（滚过页眉后出现；无遮罩无底边线；透传触摸给下方列表）──
         if (this.activeTab === 'video' ? this.videoSticky : this.dynSticky) {
           Column() {
-            Row() {}.width('100%').height(this.statusBarHeight + 56 + 6)
+            Row() {}.width('100%').height(this.statusBarHeight + 56 + 16)
             // 顶 0：与列表内行（无上下 padding）像素级对位，交换无缝
             this.sectionRow(0, this.cardListMargin)
           }
@@ -1488,7 +1488,7 @@ struct UpSpacePage {
       .onDidScroll((_offset: number, _state: ScrollState) => {
         // 顶 spacer 0 + 两行距 2×cardListMargin − 吸顶条顶距 6
         const y = this.videoScroller.currentOffset().yOffset;
-        const sticky = y > this.headerH + 2 * this.cardListMargin - 6;
+        const sticky = y > this.headerH + 2 * this.cardListMargin - 16;
         if (sticky !== this.videoSticky) {
           this.videoSticky = sticky;
         }
@@ -2513,7 +2513,7 @@ struct UpSpacePage {
           return;
         }
         const y = this.dynScroller.currentOffset().yOffset;
-        const sticky = y > this.headerH + 2 * this.cardListMargin - 6;
+        const sticky = y > this.headerH + 2 * this.cardListMargin - 16;
         if (sticky !== this.dynSticky) {
           this.dynSticky = sticky;
         }
