@@ -1285,8 +1285,10 @@ export struct ProfilePage {
 
       if (valueText.length > 0) {
         Text(valueText)
-          .fontSize(14)
+          .fontSize(12)
           .fontColor($r('sys.color.font_secondary'))
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
           .margin({ right: 8 })
       }
 
@@ -1485,12 +1487,12 @@ export struct ProfilePage {
           // ── 4. 个性化设置分组卡片 ──
           this.SectionHeader('个性化设置')
           Column() {
-            this.HividRowItem('个性化', () => { this.goToPersonalization(); }, '动画·背景·色彩')
+            this.HividRowItem('个性化', () => { this.goToPersonalization(); }, '', '动画·背景·色彩')
             Divider()
-            this.HividRowItem('卡片样式', () => { this.isCardStyleSheetShow = true; }, '圆角·边距·色彩')
+            this.HividRowItem('卡片样式', () => { this.isCardStyleSheetShow = true; }, '', '圆角·边距·色彩')
             Divider()
             Column() {
-              this.HividRowItem('应用比例调节', () => { this.openAppScaleSheet(); }, '界面缩放·文字大小')
+              this.HividRowItem('应用比例调节', () => { this.openAppScaleSheet(); }, '', '界面缩放·文字大小')
             }
             .width('100%')
             .bindSheet($$this.isAppScaleSheetShow, this.AppScaleSheetContent, {
