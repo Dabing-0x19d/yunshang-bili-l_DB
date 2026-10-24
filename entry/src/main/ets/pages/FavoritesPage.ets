@@ -544,6 +544,10 @@ struct FavoritesPage {
     }
   }
 
+  private getTopOffset(): number {
+    return (this.hideStatusBar ? 0 : this.globalStatusBarHeight) + 56 + 8;
+  }
+
   private async saveFloatBtnPrefs(): Promise<void> {
     try {
       const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
@@ -619,9 +623,9 @@ struct FavoritesPage {
         .width('100%')
         .height('100%')
         .justifyContent(FlexAlign.Start)
-        .padding({ top: this.globalStatusBarHeight + 56 })
         .opacity(this.contentOpacity)
         .scale({ x: this.contentScale, y: this.contentScale })
+        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
 
         this.FloatButtonLayer()
 
@@ -685,6 +689,7 @@ struct FavoritesPage {
       }
     })
     .titleMode(HdsNavDestinationTitleMode.MINI)
+    .bindToScrollable([this.folderScroller, this.waterFlowScroller])
     .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 
@@ -781,6 +786,8 @@ struct FavoritesPage {
         FlowItem() {
           this.SkeletonFolderCard()
         }
+        .width('100%')
+        .margin({ top: idx < this.columnCount ? this.getTopOffset() : 0 })
       })
     }
     .columnsTemplate(this.columnCount === 2 ? '1fr 1fr' : '1fr')
@@ -788,8 +795,9 @@ struct FavoritesPage {
     .rowsGap(this.cardListMargin)
     .width('100%')
     .layoutWeight(1)
-    .padding({ left: 12, right: 12, top: 8, bottom: 0 })
+    .padding({ left: 12, right: 12, bottom: 0 })
     .backgroundColor('transparent')
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
   }
 
   @Builder
@@ -879,6 +887,7 @@ struct FavoritesPage {
               this.FolderCard(item)
             }
             .width('100%')
+            .margin({ top: index < this.columnCount ? this.getTopOffset() : 0 })
             .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.96 })
           }, (item: FavFolderItem) => String(item.id))
         }
@@ -890,8 +899,9 @@ struct FavoritesPage {
         .scrollBar(BarState.Off)
         .cachedCount(30)
         .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
-        .padding({ left: 12, right: 12, top: 4, bottom: 0 })
+        .padding({ left: 12, right: 12, bottom: 0 })
         .backgroundColor('transparent')
+        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
         .opacity(this.isContentReady ? 1 : 0)
         .animation(this.da ? { duration: 0 } : { duration: 400, curve: Curve.FastOutSlowIn })
         .onScrollIndex((firstIndex: number) => {
@@ -1010,6 +1020,8 @@ struct FavoritesPage {
             FlowItem() {
               this.SkeletonVideoCard()
             }
+            .width('100%')
+            .margin({ top: idx < this.columnCount ? this.getTopOffset() : 0 })
           })
         }
         .columnsTemplate(this.columnCount === 2 ? '1fr 1fr' : '1fr')
@@ -1017,21 +1029,28 @@ struct FavoritesPage {
         .rowsGap(this.cardListMargin)
         .width('100%')
         .layoutWeight(1)
-        .padding({ left: 12, right: 12, top: 8, bottom: 0 })
+        .padding({ left: 12, right: 12, bottom: 0 })
         .backgroundColor('transparent')
+        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
       } else if (this.resourceList.length === 0) {
-        Text('收藏夹为空')
-          .fontSize(16)
-          .fontColor(this.isDarkMode ? '#999999' : '#666666')
-          .margin({ top: 60 })
+        Column() {
+          Blank()
+          Text('收藏夹为空')
+            .fontSize(16)
+            .fontColor(this.isDarkMode ? '#999999' : '#666666')
+          Blank()
+        }
+        .width('100%')
+        .layoutWeight(1)
       } else {
         Refresh({ refreshing: $$this.isRefreshing }) {
           WaterFlow({ scroller: this.waterFlowScroller }) {
-            ForEach(this.resourceList, (item: FavResourceItem) => {
+            ForEach(this.resourceList, (item: FavResourceItem, index: number) => {
               FlowItem() {
                 this.VideoCard(item)
               }
               .width('100%')
+              .margin({ top: index < this.columnCount ? this.getTopOffset() : 0 })
               .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.95 })
             }, (item: FavResourceItem) => String(item.id))
 
@@ -1071,8 +1090,9 @@ struct FavoritesPage {
           .scrollBar(BarState.Off)
           .cachedCount(30)
           .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
-          .padding({ left: 12, right: 12, top: 8, bottom: 0 })
+          .padding({ left: 12, right: 12, bottom: 0 })
           .backgroundColor('transparent')
+          .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
           .onScrollIndex((firstIndex: number) => {
             const scrollOffset: number = this.waterFlowScroller.currentOffset().yOffset;
             this.showBackToTop = Math.abs(scrollOffset) > 300;
