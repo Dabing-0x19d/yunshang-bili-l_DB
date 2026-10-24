@@ -1,7 +1,14 @@
 // PersonalizationPage.ets - 个性化设置（隐藏状态栏、锁定屏幕旋转、默认画质、选择壁纸）
 import { common } from '@kit.AbilityKit';
 import { logInfo, logWarn, logError } from '../utils/Logger';
-import { window } from '@kit.ArkUI';
+import { LengthMetrics, window } from '@kit.ArkUI';
+import {
+  hdsMaterial,
+  HdsNavigation,
+  HdsNavigationTitleMode,
+  IconStyleMode,
+  ScrollEffectType
+} from '@kit.UIDesignKit';
 import { image } from '@kit.ImageKit';
 import { photoAccessHelper } from '@kit.MediaLibraryKit';
 import { fileIo } from '@kit.CoreFileKit';
@@ -1132,20 +1139,7 @@ export struct PersonalizationPage {
 
   @Builder
   AnimModeSheetContent() {
-    Column() {
-      Row() {
-        Text('视频页动画')
-          .fontSize(16)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.isDarkMode ? '#FFFFFF' : '#000000')
-        Blank()
-        Text('实时预览')
-          .fontSize(11)
-          .fontColor(this.isDarkMode ? '#888888' : '#999999')
-      }
-      .width('100%')
-      .margin({ top: 8, bottom: 14 })
-
+    HdsNavigation() {
       Scroll() {
         Column() {
           // ── 两个开关（半宽并排）──
@@ -1165,7 +1159,7 @@ export struct PersonalizationPage {
           // ── 小窗样式（4 张形状卡）──
           Text('缩小后的小窗样式')
             .fontSize(11)
-            .fontColor(this.isDarkMode ? '#888888' : '#999999')
+            .fontColor($r('sys.color.font_secondary'))
             .width('100%')
             .margin({ bottom: 6 })
           Row({ space: 8 }) {
@@ -1183,11 +1177,11 @@ export struct PersonalizationPage {
           Row() {
             Text('页面加载动画')
               .fontSize(11)
-              .fontColor(this.isDarkMode ? '#888888' : '#999999')
+              .fontColor($r('sys.color.font_secondary'))
             Blank()
             Text('共 8 种')
               .fontSize(11)
-              .fontColor(this.isDarkMode ? '#777777' : '#AAAAAA')
+              .fontColor($r('sys.color.font_tertiary'))
           }
           .width('100%')
           .margin({ bottom: 6 })
@@ -1198,81 +1192,158 @@ export struct PersonalizationPage {
             })
           }
           .width('100%')
-
-          // 关闭按钮
-          Button('关闭')
-            .width('100%')
-            .height(40)
-            .fontSize(14)
-            .fontWeight(FontWeight.Medium)
-            .backgroundColor(this.isDarkMode ? '#3A3A3C' : '#E8E8E8')
-            .fontColor(this.isDarkMode ? '#FFFFFF' : '#000000')
-            .borderRadius(10)
-            .margin({ top: 8 })
-            .onClick(() => { this.isAnimModeSheetShow = false; })
         }
         .width('100%')
+        .padding({ top: 56 + 12, left: 16, right: 16, bottom: 24 })
       }
-      .layoutWeight(1)
-      .align(Alignment.Top)
+      .width('100%')
+      .height('100%')
       .scrollBar(BarState.Off)
-      // ⭐ 滑动回弹：Scroll 的 edgeEffect 默认是 None（完全硬边），要显式设 Spring。
-      //    alwaysEnabled: true → 内容不足一屏时也能拉动回弹（Scroll 的该项默认就是 true，这里写明意图）
       .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
     }
-    .width('100%')
-    .height('100%')
-    .padding({ left: 20, right: 20, bottom: 24 })
+    .titleMode(HdsNavigationTitleMode.MODAL)
+    .titleBar({
+      padding: { start: LengthMetrics.vp(16), end: LengthMetrics.vp(16) },
+      style: {
+        scrollEffectOpts: {
+          enableScrollEffect: true,
+          scrollEffectType: ScrollEffectType.IMMERSIVE_GRADIENT_BLUR,
+          blurEffectiveStartOffset: LengthMetrics.vp(0),
+          blurEffectiveEndOffset: LengthMetrics.vp(20)
+        },
+        systemMaterialEffect: {
+          materialType: hdsMaterial.MaterialType.ADAPTIVE,
+          materialLevel: hdsMaterial.MaterialLevel.EXQUISITE
+        },
+        originalStyle: {
+          backgroundStyle: { backgroundColor: 'transparent' },
+          contentStyle: {
+            titleStyle: { mainTitleColor: $r('sys.color.font_primary'), subTitleColor: $r('sys.color.font_secondary') },
+            menuStyle: { backgroundColor: $r('sys.color.comp_background_tertiary'), iconColor: $r('sys.color.icon_primary') },
+            backIconStyle: { backgroundColor: $r('sys.color.comp_background_tertiary'), iconColor: $r('sys.color.icon_primary') }
+          }
+        },
+        scrollEffectStyle: {
+          backgroundStyle: { backgroundColor: 'transparent' },
+          contentStyle: {
+            titleStyle: { mainTitleColor: $r('sys.color.font_primary'), subTitleColor: $r('sys.color.font_secondary') },
+            menuStyle: { backgroundColor: $r('sys.color.comp_background_tertiary'), iconColor: $r('sys.color.icon_primary') },
+            backIconStyle: { backgroundColor: $r('sys.color.comp_background_tertiary'), iconColor: $r('sys.color.icon_primary') }
+          }
+        }
+      },
+      content: {
+        title: {
+          mainTitle: '视频页动画',
+          subTitle: '实时预览'
+        },
+        menu: {
+          value: [
+            {
+              content: {
+                label: 'modal_cancel',
+                isEnabled: true,
+                type: IconStyleMode.SMALL,
+                action: (): void => {
+                  this.isAnimModeSheetShow = false;
+                  this.stopPreviewLoop();
+                }
+              }
+            }
+          ]
+        }
+      }
+    })
   }
 
   @Builder
   FloatBtnSpeedSheetContent() {
-    Column() {
-      // 标题
-      Text('浮窗旋转速度')
-        .fontSize(16)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(this.isDarkMode ? '#FFFFFF' : '#000000')
-        .margin({ top: 8, bottom: 16 })
-
-      ForEach(FLOAT_BTN_SPEEDS, (option: FloatBtnSpeedOption) => {
-        Row() {
-          Text(this.floatBtnRotationSpeed === option.value ? '●' : '○')
-            .fontSize(14)
-            .fontColor(this.floatBtnRotationSpeed === option.value
-              ? (this.isDarkMode ? '#FFFFFF' : '#000000')
-              : (this.isDarkMode ? '#888888' : '#999999'))
-            .margin({ right: 8 })
-          Text(option.label)
-            .fontSize(14)
-            .fontColor(this.floatBtnRotationSpeed === option.value
-              ? (this.isDarkMode ? '#FFFFFF' : '#000000')
-              : (this.isDarkMode ? '#AAAAAA' : '#666666'))
+    HdsNavigation() {
+      Scroll() {
+        Column({ space: 6 }) {
+          ForEach(FLOAT_BTN_SPEEDS, (option: FloatBtnSpeedOption) => {
+            Row() {
+              Text(option.label)
+                .fontSize(15)
+                .fontColor(this.floatBtnRotationSpeed === option.value
+                  ? $r('sys.color.font_primary')
+                  : $r('sys.color.font_secondary'))
+              Blank()
+              if (this.floatBtnRotationSpeed === option.value) {
+                SymbolGlyph($r('sys.symbol.checkmark'))
+                  .fontSize(16)
+                  .fontColor([$r('sys.color.icon_emphasize')])
+              }
+            }
+            .width('100%')
+            .height(52)
+            .padding({ left: 16, right: 16 })
+            .borderRadius(12)
+            .backgroundColor(this.floatBtnRotationSpeed === option.value
+              ? (this.isDarkMode ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.05)')
+              : Color.Transparent)
+            .onClick(() => { this.saveFloatBtnRotationSpeed(option.value); })
+          })
         }
         .width('100%')
-        .height(44)
-        .padding({ left: 16, right: 16 })
-        .borderRadius(10)
-        .backgroundColor(this.floatBtnRotationSpeed === option.value
-          ? (this.isDarkMode ? 'rgba(255,255,255,0.30)' : 'rgba(0,0,0,0.06)')
-          : Color.Transparent)
-        .onClick(() => { this.saveFloatBtnRotationSpeed(option.value); })
-      })
-
-      // 关闭按钮
-      Button('关闭')
-        .width('100%')
-        .height(40)
-        .fontSize(14)
-        .fontWeight(FontWeight.Medium)
-        .backgroundColor(this.isDarkMode ? '#3A3A3C' : '#E8E8E8')
-        .fontColor(this.isDarkMode ? '#FFFFFF' : '#000000')
-        .borderRadius(10)
-        .margin({ top: 16 })
-        .onClick(() => { this.isFloatBtnSpeedSheetShow = false; })
+        .padding({ top: 56 + 12, left: 16, right: 16, bottom: 24 })
+      }
+      .width('100%')
+      .height('100%')
+      .scrollBar(BarState.Off)
+      .edgeEffect(EdgeEffect.Spring)
     }
-    .width('100%')
-    .padding({ left: 20, right: 20, bottom: 24 })
+    .titleMode(HdsNavigationTitleMode.MODAL)
+    .titleBar({
+      padding: { start: LengthMetrics.vp(16), end: LengthMetrics.vp(16) },
+      style: {
+        scrollEffectOpts: {
+          enableScrollEffect: true,
+          scrollEffectType: ScrollEffectType.IMMERSIVE_GRADIENT_BLUR,
+          blurEffectiveStartOffset: LengthMetrics.vp(0),
+          blurEffectiveEndOffset: LengthMetrics.vp(20)
+        },
+        systemMaterialEffect: {
+          materialType: hdsMaterial.MaterialType.ADAPTIVE,
+          materialLevel: hdsMaterial.MaterialLevel.EXQUISITE
+        },
+        originalStyle: {
+          backgroundStyle: { backgroundColor: 'transparent' },
+          contentStyle: {
+            titleStyle: { mainTitleColor: $r('sys.color.font_primary'), subTitleColor: $r('sys.color.font_secondary') },
+            menuStyle: { backgroundColor: $r('sys.color.comp_background_tertiary'), iconColor: $r('sys.color.icon_primary') },
+            backIconStyle: { backgroundColor: $r('sys.color.comp_background_tertiary'), iconColor: $r('sys.color.icon_primary') }
+          }
+        },
+        scrollEffectStyle: {
+          backgroundStyle: { backgroundColor: 'transparent' },
+          contentStyle: {
+            titleStyle: { mainTitleColor: $r('sys.color.font_primary'), subTitleColor: $r('sys.color.font_secondary') },
+            menuStyle: { backgroundColor: $r('sys.color.comp_background_tertiary'), iconColor: $r('sys.color.icon_primary') },
+            backIconStyle: { backgroundColor: $r('sys.color.comp_background_tertiary'), iconColor: $r('sys.color.icon_primary') }
+          }
+        }
+      },
+      content: {
+        title: {
+          mainTitle: '浮窗旋转速度'
+        },
+        menu: {
+          value: [
+            {
+              content: {
+                label: 'modal_cancel',
+                isEnabled: true,
+                type: IconStyleMode.SMALL,
+                action: (): void => {
+                  this.isFloatBtnSpeedSheetShow = false;
+                }
+              }
+            }
+          ]
+        }
+      }
+    })
   }
 
   // ── 壁纸相关方法 ──
@@ -1414,227 +1485,350 @@ export struct PersonalizationPage {
     this.isWallpaperSheetShow = true;
   }
 
+  private dismissColorThemeSheet(): void {
+    if (this.customThemeColor !== this.committedThemeColor) {
+      AlertDialog.show({
+        title: '退出颜色主题',
+        message: '有未应用的颜色更改，退出后将丢失。是否退出？',
+        autoCancel: false,
+        primaryButton: {
+          value: '取消',
+          fontColor: this.isDarkMode ? '#FFFFFF' : '#000000',
+          action: () => {}
+        },
+        secondaryButton: {
+          value: '退出',
+          fontColor: '#E84040',
+          action: () => {
+            this.customThemeColor = this.committedThemeColor;
+            this.showColorTheme = false;
+          }
+        }
+      });
+    } else {
+      this.showColorTheme = false;
+    }
+  }
+
   @Builder
   WallpaperSheetContent() {
-    Column() {
+    HdsNavigation() {
       WallpaperSelectPage({ onClose: () => { this.isWallpaperSheetShow = false; } })
     }
-    .width('100%')
-    .height('100%')
+    .titleMode(HdsNavigationTitleMode.MODAL)
+    .titleBar({
+      padding: { start: LengthMetrics.vp(16), end: LengthMetrics.vp(16) },
+      style: {
+        scrollEffectOpts: {
+          enableScrollEffect: true,
+          scrollEffectType: ScrollEffectType.IMMERSIVE_GRADIENT_BLUR,
+          blurEffectiveStartOffset: LengthMetrics.vp(0),
+          blurEffectiveEndOffset: LengthMetrics.vp(20)
+        },
+        systemMaterialEffect: {
+          materialType: hdsMaterial.MaterialType.ADAPTIVE,
+          materialLevel: hdsMaterial.MaterialLevel.EXQUISITE
+        },
+        originalStyle: {
+          backgroundStyle: { backgroundColor: 'transparent' },
+          contentStyle: {
+            titleStyle: { mainTitleColor: $r('sys.color.font_primary'), subTitleColor: $r('sys.color.font_secondary') },
+            menuStyle: { backgroundColor: $r('sys.color.comp_background_tertiary'), iconColor: $r('sys.color.icon_primary') },
+            backIconStyle: { backgroundColor: $r('sys.color.comp_background_tertiary'), iconColor: $r('sys.color.icon_primary') }
+          }
+        },
+        scrollEffectStyle: {
+          backgroundStyle: { backgroundColor: 'transparent' },
+          contentStyle: {
+            titleStyle: { mainTitleColor: $r('sys.color.font_primary'), subTitleColor: $r('sys.color.font_secondary') },
+            menuStyle: { backgroundColor: $r('sys.color.comp_background_tertiary'), iconColor: $r('sys.color.icon_primary') },
+            backIconStyle: { backgroundColor: $r('sys.color.comp_background_tertiary'), iconColor: $r('sys.color.icon_primary') }
+          }
+        }
+      },
+      content: {
+        title: {
+          mainTitle: '壁纸设置'
+        },
+        menu: {
+          value: [
+            {
+              content: {
+                label: 'modal_cancel',
+                isEnabled: true,
+                type: IconStyleMode.SMALL,
+                action: (): void => {
+                  this.isWallpaperSheetShow = false;
+                }
+              }
+            }
+          ]
+        }
+      }
+    })
   }
 
   @Builder
   ColorThemeSheetContent() {
-    Column() {
-      Row() {
-        Text('颜色主题')
-          .fontSize(14)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.isDarkMode ? '#FFFFFF' : '#000000')
-      }
-      .width('100%')
-      .margin({ top: 4, bottom: 14 })
-
-      // ⭐ Row 1：色轮（左50%）| 预设色卡（右上）+ 保持色卡（右下）
-      Row() {
-        // ── 左50%：色轮（完整显示 160×160）──
+    HdsNavigation() {
+      Scroll() {
         Column() {
-          Canvas(this.canvasCtx)
-            .width(160).height(160)
-            .onReady(() => { this.drawColorWheel(); })
-            .onTouch((event: TouchEvent) => { this.handleColorWheelTouch(event); })
-        }
-        .layoutWeight(1)
-        .alignItems(HorizontalAlign.Center)
-        .justifyContent(FlexAlign.Center)
-
-        // ── 右50%：上为预设色卡，下为保持色卡 ──
-        Column() {
-          // 预设色卡（顶部，4列2行方形）
-          Column() {
-            Text('预设色卡').fontSize(11).fontColor(this.isDarkMode ? '#AAAAAA' : '#888888')
-              .margin({ bottom: 4 })
-            Grid() {
-              ForEach(this.presetColors, (color: string) => {
-                GridItem() {
-                  Column() {
-                    Column()
-                      .width('100%')
-                      .height('100%')
-                      .backgroundColor(color)
-                      .borderRadius(8)
-                      .onClick(() => {
-                        const hsv2: [number, number, number] = this.hexToHsv(color);
-                        this.colorPickerHue = hsv2[0];
-                        this.colorPickerSaturation = hsv2[1];
-                        this.colorPickerBrightness = hsv2[2];
-                        this.updateColorPickerPreview();
-                      })
-                      .clickEffect({ level: 0, scale: 0.9 })
-                  }
-                  .padding(4)
-                }
-                // .shadow({ radius: 2, color: '#15000000', offsetY: 1 })
-              })
+          // ⭐ Row 1：色轮（左50%）| 预设色卡（右上）+ 保持色卡（右下）
+          Row() {
+            // ── 左50%：色轮（完整显示 160×160）──
+            Column() {
+              Canvas(this.canvasCtx)
+                .width(160).height(160)
+                .onReady(() => { this.drawColorWheel(); })
+                .onTouch((event: TouchEvent) => { this.handleColorWheelTouch(event); })
             }
-            .columnsTemplate('1fr 1fr 1fr 1fr')
-            .rowsTemplate('1fr 1fr')
-            .columnsGap(6)
-            .rowsGap(6)
-            .height(68)
-            .width('100%')
-          }
+            .layoutWeight(1)
+            .alignItems(HorizontalAlign.Center)
+            .justifyContent(FlexAlign.Center)
 
-          // 弹性间距
-          Blank().layoutWeight(1)
-
-          // 保持色卡（底部，4列2行方形）
-          Column() {
-            Text('已保存色卡').fontSize(11).fontColor(this.isDarkMode ? '#AAAAAA' : '#888888')
-              .margin({ bottom: 4 })
-            Grid() {
-              ForEach(this.getSavedColorsList(), (color: string, index: number) => {
-                GridItem() {
-                  Column() {
-                    Column()
-                      .width('100%')
-                      .height('100%')
-                      .backgroundColor(color)
-                      .borderRadius(8)
-                      .onClick(() => {
-                        const hsv3: [number, number, number] = this.hexToHsv(color);
-                        this.colorPickerHue = hsv3[0];
-                        this.colorPickerSaturation = hsv3[1];
-                        this.colorPickerBrightness = hsv3[2];
-                        this.updateColorPickerPreview();
-                      })
-                      .gesture(
-                        LongPressGesture({ repeat: false, duration: 500 })
-                          .onAction(() => {
-                            this.removeSavedColor(index);
+            // ── 右50%：上为预设色卡，下为保持色卡 ──
+            Column() {
+              // 预设色卡（顶部，4列2行方形）
+              Column() {
+                Text('预设色卡').fontSize(11).fontColor(this.isDarkMode ? '#AAAAAA' : '#888888')
+                  .margin({ bottom: 4 })
+                Grid() {
+                  ForEach(this.presetColors, (color: string) => {
+                    GridItem() {
+                      Column() {
+                        Column()
+                          .width('100%')
+                          .height('100%')
+                          .backgroundColor(color)
+                          .borderRadius(8)
+                          .onClick(() => {
+                            const hsv2: [number, number, number] = this.hexToHsv(color);
+                            this.colorPickerHue = hsv2[0];
+                            this.colorPickerSaturation = hsv2[1];
+                            this.colorPickerBrightness = hsv2[2];
+                            this.updateColorPickerPreview();
                           })
-                      )
-                      .clickEffect({ level: 0, scale: 0.9 })
-                  }
-                  .padding(4)
+                          .clickEffect({ level: 0, scale: 0.9 })
+                      }
+                      .padding(4)
+                    }
+                    // .shadow({ radius: 2, color: '#15000000', offsetY: 1 })
+                  })
                 }
-                // .shadow({ radius: 2, color: '#15000000', offsetY: 1 })
-              })
+                .columnsTemplate('1fr 1fr 1fr 1fr')
+                .rowsTemplate('1fr 1fr')
+                .columnsGap(6)
+                .rowsGap(6)
+                .height(68)
+                .width('100%')
+              }
+
+              // 弹性间距
+              Blank().layoutWeight(1)
+
+              // 保持色卡（底部，4列2行方形）
+              Column() {
+                Text('已保存色卡').fontSize(11).fontColor(this.isDarkMode ? '#AAAAAA' : '#888888')
+                  .margin({ bottom: 4 })
+                Grid() {
+                  ForEach(this.getSavedColorsList(), (color: string, index: number) => {
+                    GridItem() {
+                      Column() {
+                        Column()
+                          .width('100%')
+                          .height('100%')
+                          .backgroundColor(color)
+                          .borderRadius(8)
+                          .onClick(() => {
+                            const hsv3: [number, number, number] = this.hexToHsv(color);
+                            this.colorPickerHue = hsv3[0];
+                            this.colorPickerSaturation = hsv3[1];
+                            this.colorPickerBrightness = hsv3[2];
+                            this.updateColorPickerPreview();
+                          })
+                          .gesture(
+                            LongPressGesture({ repeat: false, duration: 500 })
+                              .onAction(() => {
+                                this.removeSavedColor(index);
+                              })
+                          )
+                          .clickEffect({ level: 0, scale: 0.9 })
+                      }
+                      .padding(4)
+                    }
+                    // .shadow({ radius: 2, color: '#15000000', offsetY: 1 })
+                  })
+                }
+                .columnsTemplate('1fr 1fr 1fr 1fr')
+                .rowsTemplate('1fr 1fr')
+                .columnsGap(6)
+                .rowsGap(6)
+                .height(68)
+                .width('100%')
+              }
             }
-            .columnsTemplate('1fr 1fr 1fr 1fr')
-            .rowsTemplate('1fr 1fr')
-            .columnsGap(6)
-            .rowsGap(6)
-            .height(68)
+            .layoutWeight(1)
+            .height('100%')
+            .padding({ left: 8 })
+          }
+          .width('100%')
+          .height(195)
+          .margin({ bottom: 14 })
+
+          // ⭐ 单列：HSV 滑块
+          Row() {
+            Text('色相').fontSize(13).fontColor(this.isDarkMode ? '#FFFFFF' : '#000000').width(36)
+            Slider({ value: this.colorPickerHue, min: 0, max: 360, step: 1, style: SliderStyle.InSet })
+              .layoutWeight(1)
+              .trackColor(this.isDarkMode ? '#3A3A3A' : '#E8E8E8')
+              .blockColor(this.customThemeColor)
+              .onChange((value: number) => { this.colorPickerHue = value; this.updateColorPickerPreview(); this.drawColorWheel(); })
+            Text(`${Math.round(this.colorPickerHue)}°`).fontSize(12).fontColor(this.isDarkMode ? '#FFFFFF' : '#000000').width(30).textAlign(TextAlign.End)
+          }
+          .width('100%').height(32).alignItems(VerticalAlign.Center)
+
+          Row() {
+            Text('饱和').fontSize(13).fontColor(this.isDarkMode ? '#FFFFFF' : '#000000').width(36)
+            Slider({ value: this.colorPickerSaturation, min: 0, max: 100, step: 1, style: SliderStyle.InSet })
+              .layoutWeight(1)
+              .trackColor(this.isDarkMode ? '#3A3A3A' : '#E8E8E8')
+              .blockColor(this.customThemeColor)
+              .onChange((value: number) => { this.colorPickerSaturation = value; this.updateColorPickerPreview(); this.drawColorWheel(); })
+            Text(`${Math.round(this.colorPickerSaturation)}`).fontSize(12).fontColor(this.isDarkMode ? '#FFFFFF' : '#000000').width(30).textAlign(TextAlign.End)
+          }
+          .width('100%').height(32).alignItems(VerticalAlign.Center)
+
+          Row() {
+            Text('亮度').fontSize(13).fontColor(this.isDarkMode ? '#FFFFFF' : '#000000').width(36)
+            Slider({ value: this.colorPickerBrightness, min: 0, max: 100, step: 1, style: SliderStyle.InSet })
+              .layoutWeight(1)
+              .trackColor(this.isDarkMode ? '#3A3A3A' : '#E8E8E8')
+              .blockColor(this.customThemeColor)
+              .onChange((value: number) => { this.colorPickerBrightness = value; this.updateColorPickerPreview(); this.drawColorWheel(); })
+            Text(`${Math.round(this.colorPickerBrightness)}`).fontSize(12).fontColor(this.isDarkMode ? '#FFFFFF' : '#000000').width(30).textAlign(TextAlign.End)
+          }
+          .width('100%').height(32).alignItems(VerticalAlign.Center)
+          .margin({ bottom: 8 })
+
+          // ⭐ 单列：预览色 + 保存当前颜色
+          Row() {
+            Column() {
+              Text('预览色')
+                .fontSize(13)
+                .fontColor(Color.White)
+            }
+            .height(32)
+            .backgroundColor(this.customThemeColor)
+            .borderRadius(8)
+            .justifyContent(FlexAlign.Center)
+            .alignItems(HorizontalAlign.Center)
+            .layoutWeight(1)
+            .onClick(() => { this.onCustomColorSelected(this.customThemeColor); })
+            .clickEffect({ level: 0, scale: 0.94 })
+            Blank().width(8)
+            Button('保存当前色卡')
+              .height(32)
+              .fontSize(13)
+              .fontWeight(FontWeight.Medium)
+              .backgroundColor(this.isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)')
+              .fontColor(this.customThemeColor)
+              .border({ width: 1, color: this.customThemeColor })
+              .borderRadius(8)
+              .layoutWeight(1)
+              .onClick(() => { this.saveCurrentColor(); })
+              .clickEffect({ level: 0, scale: 0.94 })
+          }
+          .width('100%')
+          .margin({ bottom: 14 })
+
+          // ⭐ Row 2：从壁纸取色 | 应用
+          Row() {
+            Button('从壁纸取色')
+              .height(40)
+              .fontSize(14)
+              .fontWeight(FontWeight.Medium)
+              .backgroundColor(this.customThemeColor)
+              .fontColor(Color.White)
+              .borderRadius(10)
+              .onClick(() => { this.extractColorFromWallpaper(); })
+              .clickEffect({ level: 0, scale: 0.96 })
+              .layoutWeight(1)
+              .margin({ right: 6 })
+            Button('应用').fontSize(14).height(40).fontColor(Color.White).backgroundColor(this.customThemeColor)
+              .borderRadius(10).layoutWeight(1).fontWeight(FontWeight.Medium)
+              .onClick(() => { this.onCustomColorSelected(this.customThemeColor); })
+              .clickEffect({ level: 0, scale: 0.94 })
+          }
+          .width('100%')
+          .margin({ bottom: 14 })
+
+          // ⭐ 底部提示：引导壁纸取色失败时手动选色
+          Text('壁纸取色失败，底部栏回退到默认的非悬浮态外观时，请手动选取颜色。')
+            .fontSize(13)
+            .fontColor(this.isDarkMode ? '#666666' : '#999999')
+            .textAlign(TextAlign.Center)
             .width('100%')
+            .margin({ top: 0, bottom: 0 })
+        }
+        .width('100%')
+        .padding({ top: 56 + 12, left: 18, right: 18, bottom: 24 })
+      }
+      .width('100%')
+      .height('100%')
+      .scrollBar(BarState.Off)
+      .edgeEffect(EdgeEffect.Spring)
+    }
+    .titleMode(HdsNavigationTitleMode.MODAL)
+    .titleBar({
+      padding: { start: LengthMetrics.vp(16), end: LengthMetrics.vp(16) },
+      style: {
+        scrollEffectOpts: {
+          enableScrollEffect: true,
+          scrollEffectType: ScrollEffectType.IMMERSIVE_GRADIENT_BLUR,
+          blurEffectiveStartOffset: LengthMetrics.vp(0),
+          blurEffectiveEndOffset: LengthMetrics.vp(20)
+        },
+        systemMaterialEffect: {
+          materialType: hdsMaterial.MaterialType.ADAPTIVE,
+          materialLevel: hdsMaterial.MaterialLevel.EXQUISITE
+        },
+        originalStyle: {
+          backgroundStyle: { backgroundColor: 'transparent' },
+          contentStyle: {
+            titleStyle: { mainTitleColor: $r('sys.color.font_primary'), subTitleColor: $r('sys.color.font_secondary') },
+            menuStyle: { backgroundColor: $r('sys.color.comp_background_tertiary'), iconColor: $r('sys.color.icon_primary') },
+            backIconStyle: { backgroundColor: $r('sys.color.comp_background_tertiary'), iconColor: $r('sys.color.icon_primary') }
+          }
+        },
+        scrollEffectStyle: {
+          backgroundStyle: { backgroundColor: 'transparent' },
+          contentStyle: {
+            titleStyle: { mainTitleColor: $r('sys.color.font_primary'), subTitleColor: $r('sys.color.font_secondary') },
+            menuStyle: { backgroundColor: $r('sys.color.comp_background_tertiary'), iconColor: $r('sys.color.icon_primary') },
+            backIconStyle: { backgroundColor: $r('sys.color.comp_background_tertiary'), iconColor: $r('sys.color.icon_primary') }
           }
         }
-        .layoutWeight(1)
-        .height('100%')
-        .padding({ left: 8 })
-      }
-      .width('100%')
-      .height(195)
-      .margin({ bottom: 14 })
-
-      // ⭐ 单列：HSV 滑块
-      Row() {
-        Text('色相').fontSize(13).fontColor(this.isDarkMode ? '#FFFFFF' : '#000000').width(36)
-        Slider({ value: this.colorPickerHue, min: 0, max: 360, step: 1, style: SliderStyle.InSet })
-          .layoutWeight(1)
-          .trackColor(this.isDarkMode ? '#3A3A3A' : '#E8E8E8')
-          .blockColor(this.customThemeColor)
-          .onChange((value: number) => { this.colorPickerHue = value; this.updateColorPickerPreview(); this.drawColorWheel(); })
-        Text(`${Math.round(this.colorPickerHue)}°`).fontSize(12).fontColor(this.isDarkMode ? '#FFFFFF' : '#000000').width(30).textAlign(TextAlign.End)
-      }
-      .width('100%').height(32).alignItems(VerticalAlign.Center)
-
-      Row() {
-        Text('饱和').fontSize(13).fontColor(this.isDarkMode ? '#FFFFFF' : '#000000').width(36)
-        Slider({ value: this.colorPickerSaturation, min: 0, max: 100, step: 1, style: SliderStyle.InSet })
-          .layoutWeight(1)
-          .trackColor(this.isDarkMode ? '#3A3A3A' : '#E8E8E8')
-          .blockColor(this.customThemeColor)
-          .onChange((value: number) => { this.colorPickerSaturation = value; this.updateColorPickerPreview(); this.drawColorWheel(); })
-        Text(`${Math.round(this.colorPickerSaturation)}`).fontSize(12).fontColor(this.isDarkMode ? '#FFFFFF' : '#000000').width(30).textAlign(TextAlign.End)
-      }
-      .width('100%').height(32).alignItems(VerticalAlign.Center)
-
-      Row() {
-        Text('亮度').fontSize(13).fontColor(this.isDarkMode ? '#FFFFFF' : '#000000').width(36)
-        Slider({ value: this.colorPickerBrightness, min: 0, max: 100, step: 1, style: SliderStyle.InSet })
-          .layoutWeight(1)
-          .trackColor(this.isDarkMode ? '#3A3A3A' : '#E8E8E8')
-          .blockColor(this.customThemeColor)
-          .onChange((value: number) => { this.colorPickerBrightness = value; this.updateColorPickerPreview(); this.drawColorWheel(); })
-        Text(`${Math.round(this.colorPickerBrightness)}`).fontSize(12).fontColor(this.isDarkMode ? '#FFFFFF' : '#000000').width(30).textAlign(TextAlign.End)
-      }
-      .width('100%').height(32).alignItems(VerticalAlign.Center)
-      .margin({ bottom: 8 })
-
-      // ⭐ 单列：预览色 + 保存当前颜色
-      Row() {
-        Column() {
-          Text('预览色')
-            .fontSize(13)
-            .fontColor(Color.White)
+      },
+      content: {
+        title: {
+          mainTitle: '颜色主题'
+        },
+        menu: {
+          value: [
+            {
+              content: {
+                label: 'modal_cancel',
+                isEnabled: true,
+                type: IconStyleMode.SMALL,
+                action: (): void => {
+                  this.dismissColorThemeSheet();
+                }
+              }
+            }
+          ]
         }
-        .height(32)
-        .backgroundColor(this.customThemeColor)
-        .borderRadius(8)
-        .justifyContent(FlexAlign.Center)
-        .alignItems(HorizontalAlign.Center)
-        .layoutWeight(1)
-        .onClick(() => { this.onCustomColorSelected(this.customThemeColor); })
-        .clickEffect({ level: 0, scale: 0.94 })
-        Blank().width(8)
-        Button('保存当前色卡')
-          .height(32)
-          .fontSize(13)
-          .fontWeight(FontWeight.Medium)
-          .backgroundColor(this.isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)')
-          .fontColor(this.customThemeColor)
-          .border({ width: 1, color: this.customThemeColor })
-          .borderRadius(8)
-          .layoutWeight(1)
-          .onClick(() => { this.saveCurrentColor(); })
-          .clickEffect({ level: 0, scale: 0.94 })
       }
-      .width('100%')
-      .margin({ bottom: 14 })
-
-      // ⭐ Row 2：从壁纸取色 | 应用
-      Row() {
-        Button('从壁纸取色')
-          .height(40)
-          .fontSize(14)
-          .fontWeight(FontWeight.Medium)
-          .backgroundColor(this.customThemeColor)
-          .fontColor(Color.White)
-          .borderRadius(10)
-          .onClick(() => { this.extractColorFromWallpaper(); })
-          .clickEffect({ level: 0, scale: 0.96 })
-          .layoutWeight(1)
-          .margin({ right: 6 })
-        Button('应用').fontSize(14).height(40).fontColor(Color.White).backgroundColor(this.customThemeColor)
-          .borderRadius(10).layoutWeight(1).fontWeight(FontWeight.Medium)
-          .onClick(() => { this.onCustomColorSelected(this.customThemeColor); })
-          .clickEffect({ level: 0, scale: 0.94 })
-      }
-      .width('100%')
-      .margin({ bottom: 14 })
-
-      // ⭐ 底部提示：引导壁纸取色失败时手动选色
-      Text('壁纸取色失败，底部栏回退到默认的非悬浮态外观时，请手动选取颜色。')
-        .fontSize(13)
-        .fontColor(this.isDarkMode ? '#666666' : '#999999')
-        .textAlign(TextAlign.Center)
-        .width('100%')
-        .margin({ top: 0, bottom: 0 })
-    }
-    .width('100%')
-    .padding({ left: 18, right: 18, top: 8, bottom: 12 })
-    .backgroundColor(this.isDarkMode ? '#1C1C1E' : '#F5F5F5')
+    })
   }
 
   // ── 其他方法 ──
@@ -1900,11 +2094,12 @@ export struct PersonalizationPage {
                 })
               }
               .width('100%')
-              .bindSheet($$this.isAnimModeSheetShow, this.AnimModeSheetContent(), {
-                height: '74%',
+              .bindSheet($$this.isAnimModeSheetShow, this.AnimModeSheetContent, {
+                height: '75%',
                 dragBar: false,
                 showClose: false,
-                backgroundColor: this.isDarkMode ? '#1C1C1E' : '#F5F5F5',
+                backgroundColor: undefined,
+                preferType: SheetType.CENTER,
                 onDisappear: () => {
                   this.isAnimModeSheetShow = false;
                   this.stopPreviewLoop();
@@ -1964,11 +2159,12 @@ export struct PersonalizationPage {
           }
           .width('100%')
           .margin({ bottom: 12 })
-          .bindSheet($$this.showColorTheme, this.ColorThemeSheetContent(), {
-            height: '75%',
+          .bindSheet($$this.showColorTheme, this.ColorThemeSheetContent, {
+            height: '78%',
             dragBar: false,
             showClose: false,
-            backgroundColor: this.isDarkMode ? '#1C1C1E' : '#F5F5F5',
+            backgroundColor: undefined,
+            preferType: SheetType.CENTER,
             onWillDismiss: (dismissSheetAction: DismissSheetAction) => {
               if (this.customThemeColor !== this.committedThemeColor) {
                 AlertDialog.show({
@@ -2000,11 +2196,12 @@ export struct PersonalizationPage {
       .opacity(this.showContent ? 1 : 0)
       .translate({ y: this.showContent ? 0 : 20 })
       .animation({ duration: 300, curve: Curve.EaseOut, delay: 50 })
-      .bindSheet($$this.isFloatBtnSpeedSheetShow, this.FloatBtnSpeedSheetContent(), {
+      .bindSheet($$this.isFloatBtnSpeedSheetShow, this.FloatBtnSpeedSheetContent, {
         height: '50%',
         dragBar: false,
         showClose: false,
-        backgroundColor: this.isDarkMode ? '#1C1C1E' : '#F5F5F5',
+        backgroundColor: undefined,
+        preferType: SheetType.CENTER,
         onDisappear: () => { this.isFloatBtnSpeedSheetShow = false; }
       })
     }
@@ -2012,11 +2209,12 @@ export struct PersonalizationPage {
     .scrollBar(BarState.Off)
     .edgeEffect(EdgeEffect.Spring)
     .padding({ top: 56, bottom: 24 })
-    .bindSheet($$this.isWallpaperSheetShow, this.WallpaperSheetContent(), {
-      height: '55%',
+    .bindSheet($$this.isWallpaperSheetShow, this.WallpaperSheetContent, {
+      height: '65%',
       dragBar: false,
       showClose: false,
-      backgroundColor: this.isDarkMode ? '#1C1C1E' : '#F5F5F5',
+      backgroundColor: undefined,
+      preferType: SheetType.CENTER,
       onDisappear: () => { this.isWallpaperSheetShow = false; }
     })
   }
