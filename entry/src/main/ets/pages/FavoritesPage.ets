@@ -546,7 +546,7 @@ struct FavoritesPage {
 
   /** 顶部悬浮区总高（列表顶部避让：状态栏 + 悬浮行 40 + 间距，关注粉丝页面同款） */
   private topInset(): number {
-    return (this.hideStatusBar ? 12 : (this.globalStatusBarHeight + 7)) + 40 + 8;
+    return (this.hideStatusBar ? 12 : (this.globalStatusBarHeight + 7)) + 40 + 16;
   }
 
   private async saveFloatBtnPrefs(): Promise<void> {
