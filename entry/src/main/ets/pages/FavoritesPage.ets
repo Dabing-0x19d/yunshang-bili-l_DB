@@ -1,5 +1,15 @@
 // FavoritesPage.ets - 我的收藏页面（同步B站官方收藏夹）
-import { router, mediaquery, window, LengthMetrics, curves } from '@kit.ArkUI';
+import {
+  router,
+  mediaquery,
+  window,
+  LengthMetrics,
+  curves,
+  SegmentButton,
+  SegmentButtonOptions,
+  SegmentButtonTextItem,
+  ItemRestriction
+} from '@kit.ArkUI';
 import { logInfo, logWarn, logError } from '../utils/Logger';
 import { FloatingVideoButton } from '../components/FloatingVideoButton';
 import { common } from '@kit.AbilityKit';
@@ -29,17 +39,17 @@ enum PageMode {
 @Entry
 @Component({ freezeWhenInactive: true })
 struct FavoritesPage {
-  @StorageLink('isDarkMode') isDarkMode: boolean = false;
+  @StorageLink('isDarkMode') @Watch('onThemeChange') isDarkMode: boolean = false;
   @StorageLink('wallpaper') wallpaper: string = 'default';
   @StorageLink('customWallpaper') customWallpaper: string = '';
   @StorageLink('wallpaperBlur') wallpaperBlur: number = 0;
   @StorageLink('wallpaperDarkness') wallpaperDarkness: number = 50;
   @StorageLink('wallpaperColor') wallpaperColor: string = '#007DFF';
-  @StorageLink('customThemeColor') customThemeColor: string = '#007DFF';
+  @StorageLink('customThemeColor') @Watch('onThemeChange') customThemeColor: string = '#007DFF';
   @StorageLink('da') da: boolean = false;
   @StorageLink('cardTransparentStyle') cardTransparentStyle: boolean = false;
   @StorageLink('cardBorderFollowTheme') cardBorderFollowTheme: boolean = false;
-  @StorageLink('cardCapsuleFollowTheme') cardCapsuleFollowTheme: boolean = false;
+  @StorageLink('cardCapsuleFollowTheme') @Watch('onThemeChange') cardCapsuleFollowTheme: boolean = false;
   @StorageLink('cardCapsuleShow') cardCapsuleShow: boolean = true;
   @StorageLink('cardCapsuleSize') cardCapsuleSize: number = 12;
   @StorageLink('cardCapsuleRadius') cardCapsuleRadius: number = 7;
@@ -60,6 +70,17 @@ struct FavoritesPage {
 
   @State pageMode: PageMode = PageMode.FOLDER_LIST;
   @State activeTabIndex: number = 0;
+  @State tabSelectedIndexes: number[] = [0];
+  @State tabOptions: SegmentButtonOptions = SegmentButtonOptions.tab({
+    buttons: [
+      { text: '收藏夹' },
+      { text: '订阅' }
+    ] as ItemRestriction<SegmentButtonTextItem>,
+    selectedFontColor: '#FB7299',
+    backgroundBlurStyle: BlurStyle.BACKGROUND_THIN,
+    selectedBackgroundColor: Color.White,
+    textPadding: { top: 5, right: 5, bottom: 5, left: 5 }
+  });
   @State folderList: FavFolderItem[] = [];
   @State isLoadingFolders: boolean = true;
   @State folderListError: string = '';
@@ -109,12 +130,31 @@ struct FavoritesPage {
   private bottomSafeHeight: number = 0;
 
   async aboutToAppear(): Promise<void> {
+    this.tabOptions = this.initTabOptions();
     this.initOrientation();
     this.checkImmersiveSupport();
     await this.checkLoginState();
     this.initSmartGrip();
     this.setStatusBarTransparent();
     this.initBottomSafeHeight();
+  }
+
+  private onThemeChange(): void {
+    this.tabOptions = this.initTabOptions();
+  }
+
+  private initTabOptions(): SegmentButtonOptions {
+    return SegmentButtonOptions.tab({
+      buttons: [
+        { text: '收藏夹' },
+        { text: '订阅' }
+      ] as ItemRestriction<SegmentButtonTextItem>,
+      selectedFontColor: this.cardCapsuleFollowTheme ? this.customThemeColor : '#FB7299',
+      fontColor: this.isDarkMode ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)',
+      backgroundBlurStyle: BlurStyle.BACKGROUND_THIN,
+      selectedBackgroundColor: this.isDarkMode ? 'rgba(255, 255, 255, 0.18)' : Color.White,
+      textPadding: { top: 5, right: 5, bottom: 5, left: 5 }
+    });
   }
 
   aboutToDisappear(): void {
@@ -341,6 +381,7 @@ struct FavoritesPage {
       this.pageMode = PageMode.FOLDER_LIST;
     }
     this.activeTabIndex = index;
+    this.tabSelectedIndexes = [index];
     await this.loadFolders();
   }
 
@@ -509,34 +550,21 @@ struct FavoritesPage {
     }
   }
 
-  /** 标题栏居中内容（由 titleBar.content.stackBuilder 嵌入 HdsNavigation） */
+  /** 标题栏居中内容（由 titleBar.content.stackBuilder 嵌入 HdsNavDestination，使用 SegmentButton + 系统材质） */
   @Builder
   segmentButtonBuilder() {
     if (this.pageMode === PageMode.FOLDER_LIST) {
-      Row() {
-        HdsMiniBarButton({
-          barWidth: 150,
-          barHeight: 40,
-          contentPadding: 4,
-          materialType: hdsMaterial.MaterialType.IMMERSIVE,
-          materialLevel: hdsMaterial.MaterialLevel.EXQUISITE,
-          barOverlap: true,
-          barPosition: BarPosition.End
-        }) {
-          Row() {
-            this.capsuleSegmentItem(0, '收藏夹')
-            this.capsuleSegmentItem(1, '订阅')
+      SegmentButton({
+        options: this.tabOptions,
+        selectedIndexes: $tabSelectedIndexes,
+        onItemClicked: (idx: number) => {
+          if (this.activeTabIndex !== idx) {
+            this.triggerHaptic();
+            this.onTabChange(idx);
           }
-          .padding({ left: 4, right: 4 })
-          .width('100%')
-          .height('100%')
-          .justifyContent(FlexAlign.Center)
         }
-      }
-      .width('100%')
-      .height('100%')
-      .justifyContent(FlexAlign.Center)
-      .alignItems(VerticalAlign.Center)
+      })
+        .width(150)
     } else {
       Row() {
         Text(this.currentFolderTitle)
@@ -871,41 +899,6 @@ struct FavoritesPage {
     }
     .width('100%')
     .height('100%')
-  }
-
-  // ==================== Tab 切换（胶囊分段项，与粉丝关注页同款） ====================
-
-  /** 胶囊分段项（恒展开；选中主题色 + 底部下划线，与粉丝关注页一致） */
-  @Builder
-  capsuleSegmentItem(idx: number, label: string) {
-    Column() {
-      Text(label)
-        .fontSize(13)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(this.activeTabIndex === idx
-          ? (this.cardCapsuleFollowTheme ? this.customThemeColor : '#FB7299')
-          : (this.isDarkMode ? '#FFFFFF' : '#000000'))
-        .width(62)
-        .height(22)
-        .textAlign(TextAlign.Center)
-      // ⭐ 选中指示：底部主题色下划线（与粉丝关注页/首页频道分段一致）
-      Row()
-        .width(28)
-        .height(3)
-        .borderRadius(1.5)
-        .backgroundColor(this.activeTabIndex === idx
-          ? (this.cardCapsuleFollowTheme ? this.customThemeColor : '#FB7299')
-          : Color.Transparent)
-    }
-    .width(62)
-    .height(36)
-    .justifyContent(FlexAlign.Center)
-    .onClick(() => {
-      if (this.activeTabIndex !== idx) {
-        this.triggerHaptic();
-        this.onTabChange(idx);
-      }
-    })
   }
 
   // ==================== 收藏夹卡片 ====================
