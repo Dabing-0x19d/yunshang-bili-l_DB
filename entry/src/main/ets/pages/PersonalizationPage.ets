@@ -1,4 +1,4 @@
-﻿// PersonalizationPage.ets - 个性化设置（隐藏状态栏、锁定屏幕旋转、默认画质、选择壁纸）
+// PersonalizationPage.ets - 个性化设置（隐藏状态栏、锁定屏幕旋转、默认画质、选择壁纸）
 import { common } from '@kit.AbilityKit';
 import { logInfo, logWarn, logError } from '../utils/Logger';
 import { window } from '@kit.ArkUI';
@@ -111,6 +111,8 @@ const SHRINK_SIZE_DEFAULT: number = 120;
 export struct PersonalizationPage {
   onClose?: () => void;
   @StorageLink('isDarkMode') isDarkMode: boolean = false;
+  @StorageLink('cardTransparentStyle') cardTransparentStyle: boolean = false;
+  @StorageLink('cardBgOpacity') cardBgOpacity: number = 15;
   @StorageLink('hideStatusBar') hideStatusBar: boolean = false;
   @StorageLink('screenOrientationLock') screenOrientationLock: string = '自动旋转';
   @StorageLink('wallpaper') wallpaper: string = 'builtin';
@@ -999,9 +1001,9 @@ export struct PersonalizationPage {
             ? (this.isDarkMode ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)')
             : this.customThemeColor)
           .borderRadius(15)
-          .shadow(this.shrinkWindowSize === SHRINK_SIZE_DEFAULT
-            ? { radius: 0, color: '#00000000' }
-            : { radius: 8, color: '#33000000', offsetY: 2 })
+          // .shadow(this.shrinkWindowSize === SHRINK_SIZE_DEFAULT
+          //   ? { radius: 0, color: '#00000000' }
+          //   : { radius: 8, color: '#33000000', offsetY: 2 })
           .margin({ right: 6 })
           .onClick(() => { this.saveShrinkWindowSize(SHRINK_SIZE_DEFAULT); })
         Text(`${Math.round(this.shrinkWindowSize)} vp`)
@@ -1472,7 +1474,7 @@ export struct PersonalizationPage {
                   }
                   .padding(4)
                 }
-                .shadow({ radius: 2, color: '#15000000', offsetY: 1 })
+                // .shadow({ radius: 2, color: '#15000000', offsetY: 1 })
               })
             }
             .columnsTemplate('1fr 1fr 1fr 1fr')
@@ -1516,7 +1518,7 @@ export struct PersonalizationPage {
                   }
                   .padding(4)
                 }
-                .shadow({ radius: 2, color: '#15000000', offsetY: 1 })
+                // .shadow({ radius: 2, color: '#15000000', offsetY: 1 })
               })
             }
             .columnsTemplate('1fr 1fr 1fr 1fr')
@@ -1772,141 +1774,132 @@ export struct PersonalizationPage {
     });
   }
 
-  // ── 设置项构建器 ──
+  private getCardItemBg(): ResourceColor {
+    if (this.cardTransparentStyle) {
+      return this.isDarkMode
+        ? `rgba(28,28,30,${this.cardBgOpacity / 100})`
+        : `rgba(255,255,255,${this.cardBgOpacity / 100})`;
+    }
+    return $r('app.color.card_background');
+  }
+
+  // ── Hivid 风格设置项构建器 ──
 
   @Builder
-  SettingItemWithToggle(icon: ResourceStr, title: string, isOn: boolean, onChange: (isOn: boolean) => void, marginBottom: number = 12) {
+  SettingItemWithToggle(title: string, isOn: boolean, onChange: (isOn: boolean) => void) {
     Row() {
-      Image(icon)
-        .width(24).height(24)
-        .fillColor(this.isDarkMode ? '#FFFFFF' : '#000000')
-        .margin({ right: 14 })
       Text(title)
         .fontSize(16)
-        .fontColor(this.isDarkMode ? '#FFFFFF' : '#000000')
-        .fontWeight(FontWeight.Medium)
-      Blank()
+        .fontColor($r('sys.color.font_primary'))
+        .layoutWeight(1)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
       Toggle({ type: ToggleType.Switch, isOn: isOn })
         .selectedColor(this.customThemeColor)
         .switchPointColor(Color.White)
-        .onChange((value: boolean) => { onChange(value); })
+        .onChange((value: boolean) => {
+          if (value !== isOn) {
+            onChange(value);
+          }
+        })
     }
     .width('100%')
     .height(56)
-    .backgroundColor(this.isDarkMode ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.70)')
-
-    .borderRadius(20)
-    .padding({ left: 18, right: 18 })
-    .shadow({ radius: 8, color: '#0D000000', offsetY: 2 })
-    .margin({ bottom: marginBottom })
-    .animation({ duration: 150, curve: Curve.EaseOut })
-    .stateStyles({
-      pressed: {
-        backgroundColor: this.isDarkMode ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.55)'
-      }
+    .padding({ left: 16, right: 16 })
+    .alignItems(VerticalAlign.Center)
+    .onClick(() => {
+      onChange(!isOn);
     })
   }
 
   @Builder
-  SettingItemWithPicker(icon: ResourceStr, title: string, value: string, onClick: () => void, marginBottom: number = 8) {
+  SettingItemWithPicker(title: string, value: string, onClick: () => void) {
     Row() {
-      Image(icon)
-        .width(24).height(24)
-        .fillColor(this.isDarkMode ? '#FFFFFF' : '#000000')
-        .margin({ right: 14 })
       Text(title)
         .fontSize(16)
-        .fontColor(this.isDarkMode ? '#FFFFFF' : '#000000')
-        .fontWeight(FontWeight.Medium)
-      Blank()
+        .fontColor($r('sys.color.font_primary'))
+        .layoutWeight(1)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
       Text(value)
         .fontSize(14)
-        .fontColor(this.isDarkMode ? '#FFFFFF' : '#000000')
+        .fontColor($r('sys.color.font_secondary'))
         .maxLines(1)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })   // 摘要变长（页面动画 + 小窗样式）后窄屏不换行/不溢出
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
         .margin({ right: 8 })
-      Image($r('app.media.chevron_right'))
-        .width(10)
-        .height(10)
-        .fillColor(this.isDarkMode ? '#FFFFFF' : '#000000')
+      SymbolGlyph($r('sys.symbol.chevron_right'))
+        .fontSize(14)
+        .fontColor([$r('sys.color.icon_secondary')])
     }
     .width('100%')
     .height(56)
-    .backgroundColor(this.isDarkMode ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.70)')
-
-    .borderRadius(20)
-    .padding({ left: 18, right: 18 })
-    .shadow({ radius: 8, color: '#0D000000', offsetY: 2 })
-    .margin({ bottom: marginBottom })
-    .animation({ duration: 150, curve: Curve.EaseOut })
-    .stateStyles({
-      pressed: {
-        backgroundColor: 'rgba(0, 0, 0, 0.8)'
-      }
-    })
+    .padding({ left: 16, right: 16 })
+    .alignItems(VerticalAlign.Center)
     .onClick(() => { onClick(); })
   }
 
   // ── 分组标题构建器 ──
   @Builder
-  SectionHeader(icon: ResourceStr, title: string) {
-    Row() {
-      Image(icon)
-        .width(20).height(20)
-        .fillColor(this.isDarkMode ? '#8E8E93' : '#8E8E93')
-        .margin({ right: 10 })
-      Text(title)
-        .fontSize(15)
-        .fontColor(this.isDarkMode ? '#8E8E93' : '#8E8E93')
-        .fontWeight(FontWeight.Medium)
-    }
-    .width('100%')
-    .padding({ left: 6, right: 4 })
-    .margin({ top: 20, bottom: 10 })
+  SectionHeader(title: string) {
+    Text(title)
+      .fontSize(13)
+      .fontWeight(FontWeight.Medium)
+      .fontColor($r('sys.color.font_secondary'))
+      .width('94%')
+      .margin({ top: 18, bottom: 8, left: 12 })
   }
 
   build() {
-    Stack() {
+    Scroll() {
       Column() {
-          Row() {
-            Text('个性化')
-              .fontSize(18)
-              .fontWeight(FontWeight.Medium)
-              .fontColor(this.isDarkMode ? '#FFFFFF' : '#000000')
-            Blank()
-          }
-          .width('100%').height(44).padding({ left: 4, right: 4 }).margin({ bottom: 12 })
-
-          if (this.showContent) {
+        if (this.showContent) {
+          Column() {
+            // ── 视觉与外观 ──
+            this.SectionHeader('视觉与外观')
             Column() {
-              // ── 视觉与外观 ──
-              this.SectionHeader($r('app.media.paintpalette'), '视觉与外观')
-              this.SettingItemWithPicker($r('app.media.ic_settings_wallpaper'), '壁纸', this.getWallpaperLabel(), () => {
+              this.SettingItemWithPicker('壁纸', this.getWallpaperLabel(), () => {
                 this.showWallpaperPicker();
-              }, 8)
-              this.SettingItemWithPicker($r('app.media.paintpalette'), '颜色主题', this.customThemeColor, () => {
+              })
+              Divider()
+              this.SettingItemWithPicker('颜色主题', this.customThemeColor, () => {
                 this.showColorTheme = true;
-              }, 8)
-              this.SettingItemWithToggle($r('app.media.ic_settings_eyehide'), '状态栏隐藏', this.hideStatusBar, (isOn: boolean) => {
+              })
+              Divider()
+              this.SettingItemWithToggle('状态栏隐藏', this.hideStatusBar, (isOn: boolean) => {
                 this.saveHideStatusBar(isOn);
-              }, 8)
-              this.SettingItemWithToggle($r('app.media.paintpalette'), '标题胶囊彩色图标', this.capsuleColorIcons, (isOn: boolean) => {
+              })
+              Divider()
+              this.SettingItemWithToggle('标题胶囊彩色图标', this.capsuleColorIcons, (isOn: boolean) => {
                 this.saveCapsuleColorIcons(isOn);
-              }, 8)
-              this.SettingItemWithToggle($r('app.media.hand_point_up_tap_fill_1'), '悬浮按钮跟随颜色主题', this.floatBtnFollowTheme, (isOn: boolean) => {
+              })
+              Divider()
+              this.SettingItemWithToggle('悬浮按钮跟随颜色主题', this.floatBtnFollowTheme, (isOn: boolean) => {
                 this.saveFloatBtnFollowTheme(isOn);
-              }, 8)
+              })
+            }
+            .width('94%')
+            .borderRadius(15)
+            .backgroundColor(this.getCardItemBg())
+            // .shadow({
+            //   radius: 50,
+            //   color: '#80000000',
+            //   offsetX: 0,
+            //   offsetY: 15
+            // })
 
-              // ── 交互与动效 ──
-              this.SectionHeader($r('app.media.ic_desktop_box'), '交互与动效')
-              this.SettingItemWithToggle($r('app.media.nosign'), '关闭所有动画', this.disableAnimations, (isOn: boolean) => {
+            // ── 交互与动效 ──
+            this.SectionHeader('交互与动效')
+            Column() {
+              this.SettingItemWithToggle('关闭所有动画', this.disableAnimations, (isOn: boolean) => {
                 this.saveDisableAnimations(isOn);
-              }, 8)
+              })
+              Divider()
               Column() {
-                this.SettingItemWithPicker($r('app.media.ic_desktop_box'), '视频页动画', `${labelByShrinkStyle(this.shrinkWindowStyle)} · ${labelByMode(this.pageEnterAnim)}`, () => {
+                this.SettingItemWithPicker('视频页动画', `${labelByShrinkStyle(this.shrinkWindowStyle)} · ${labelByMode(this.pageEnterAnim)}`, () => {
                   this.showAnimModePicker();
-                }, 8)
+                })
               }
+              .width('100%')
               .bindSheet($$this.isAnimModeSheetShow, this.AnimModeSheetContent(), {
                 height: '74%',
                 dragBar: false,
@@ -1917,79 +1910,108 @@ export struct PersonalizationPage {
                   this.stopPreviewLoop();
                 }
               })
-              this.SettingItemWithToggle($r('app.media.lightbulb'), '震动反馈', this.vibrateEnabled, (isOn: boolean) => {
+              Divider()
+              this.SettingItemWithToggle('震动反馈', this.vibrateEnabled, (isOn: boolean) => {
                 this.saveVibrateEnabled(isOn);
-              }, 8)
-              this.SettingItemWithToggle($r('app.media.lightbulb'), '智感握姿', this.smartGripEnabled, (isOn: boolean) => {
+              })
+              Divider()
+              this.SettingItemWithToggle('智感握姿', this.smartGripEnabled, (isOn: boolean) => {
                 this.saveSmartGripEnabled(isOn);
-              }, 8)
-              this.SettingItemWithToggle($r('app.media.lightbulb'), '开灯按钮显示', this.lightsOffShowBtn, (isOn: boolean) => {
+              })
+              Divider()
+              this.SettingItemWithToggle('开灯按钮显示', this.lightsOffShowBtn, (isOn: boolean) => {
                 this.saveLightsOffShowBtn(isOn);
-              }, 8)
-              this.SettingItemWithToggle($r('app.media.lightbulb'), '关灯视频外弹幕', this.lightsOffDanmakuOutside, (isOn: boolean) => {
+              })
+              Divider()
+              this.SettingItemWithToggle('关灯视频外弹幕', this.lightsOffDanmakuOutside, (isOn: boolean) => {
                 this.saveLightsOffDanmakuOutside(isOn);
-              }, 8)
-              this.SettingItemWithToggle($r('app.media.lightbulb'), '关灯切换为隐藏组件', this.lightsOffHideOnly, (isOn: boolean) => {
+              })
+              Divider()
+              this.SettingItemWithToggle('关灯切换为隐藏组件', this.lightsOffHideOnly, (isOn: boolean) => {
                 this.saveLightsOffHideOnly(isOn);
-              }, 8)
-              this.SettingItemWithPicker($r('app.media.ic_settings_rotation'), '浮窗旋转速度', `${labelByFloatBtnSpeed(this.floatBtnRotationSpeed)}`, () => {
+              })
+              Divider()
+              this.SettingItemWithPicker('浮窗旋转速度', `${labelByFloatBtnSpeed(this.floatBtnRotationSpeed)}`, () => {
                 this.showFloatBtnSpeedPicker();
-              }, 8)
-
-              // ── 其他 ──
-              this.SectionHeader($r('app.media.ic_settings_rotation'), '其他')
-              this.SettingItemWithPicker($r('app.media.ic_settings_rotation'), '旋转', this.screenOrientationLock, () => {
-                this.showOrientationPicker();
-              }, 8)
+              })
             }
-            .width('100%')
-            .margin({ top: 12, bottom: 12 })
-            .bindSheet($$this.showColorTheme, this.ColorThemeSheetContent(), {
-              height: '75%',
-              dragBar: false,
-              showClose: false,
-              backgroundColor: this.isDarkMode ? '#1C1C1E' : '#F5F5F5',
-              onWillDismiss: (dismissSheetAction: DismissSheetAction) => {
-                if (this.customThemeColor !== this.committedThemeColor) {
-                  AlertDialog.show({
-                    title: '退出颜色主题',
-                    message: '有未应用的颜色更改，退出后将丢失。是否退出？',
-                    autoCancel: false,
-                    primaryButton: {
-                      value: '取消',
-                      fontColor: this.isDarkMode ? '#FFFFFF' : '#000000',
-                      action: () => {}
-                    },
-                    secondaryButton: {
-                      value: '退出',
-                      fontColor: '#E84040',
-                      action: () => {
-                        this.customThemeColor = this.committedThemeColor;
-                        this.showColorTheme = false;
-                      }
-                    }
-                  });
-                } else {
-                  this.showColorTheme = false;
-                }
-              }
-            })
+            .width('94%')
+            .borderRadius(15)
+            .backgroundColor(this.getCardItemBg())
+            // .shadow({
+            //   radius: 50,
+            //   color: '#80000000',
+            //   offsetX: 0,
+            //   offsetY: 15
+            // })
+
+            // ── 其他 ──
+            this.SectionHeader('其他')
+            Column() {
+              this.SettingItemWithPicker('旋转', this.screenOrientationLock, () => {
+                this.showOrientationPicker();
+              })
+            }
+            .width('94%')
+            .borderRadius(15)
+            .backgroundColor(this.getCardItemBg())
+            // .shadow({
+            //   radius: 50,
+            //   color: '#80000000',
+            //   offsetX: 0,
+            //   offsetY: 15
+            // })
           }
+          .width('100%')
+          .margin({ bottom: 12 })
+          .bindSheet($$this.showColorTheme, this.ColorThemeSheetContent(), {
+            height: '75%',
+            dragBar: false,
+            showClose: false,
+            backgroundColor: this.isDarkMode ? '#1C1C1E' : '#F5F5F5',
+            onWillDismiss: (dismissSheetAction: DismissSheetAction) => {
+              if (this.customThemeColor !== this.committedThemeColor) {
+                AlertDialog.show({
+                  title: '退出颜色主题',
+                  message: '有未应用的颜色更改，退出后将丢失。是否退出？',
+                  autoCancel: false,
+                  primaryButton: {
+                    value: '取消',
+                    fontColor: this.isDarkMode ? '#FFFFFF' : '#000000',
+                    action: () => {}
+                  },
+                  secondaryButton: {
+                    value: '退出',
+                    fontColor: '#E84040',
+                    action: () => {
+                      this.customThemeColor = this.committedThemeColor;
+                      this.showColorTheme = false;
+                    }
+                  }
+                });
+              } else {
+                this.showColorTheme = false;
+              }
+            }
+          })
         }
-        .width('100%')
-        .opacity(this.showContent ? 1 : 0)
-        .translate({ y: this.showContent ? 0 : 20 })
-        .animation({ duration: 300, curve: Curve.EaseOut, delay: 50 })
-        .bindSheet($$this.isFloatBtnSpeedSheetShow, this.FloatBtnSpeedSheetContent(), {
-          height: '50%',
-          dragBar: false,
-          showClose: false,
-          backgroundColor: this.isDarkMode ? '#1C1C1E' : '#F5F5F5',
-          onDisappear: () => { this.isFloatBtnSpeedSheetShow = false; }
-        })
       }
+      .width('100%')
+      .opacity(this.showContent ? 1 : 0)
+      .translate({ y: this.showContent ? 0 : 20 })
+      .animation({ duration: 300, curve: Curve.EaseOut, delay: 50 })
+      .bindSheet($$this.isFloatBtnSpeedSheetShow, this.FloatBtnSpeedSheetContent(), {
+        height: '50%',
+        dragBar: false,
+        showClose: false,
+        backgroundColor: this.isDarkMode ? '#1C1C1E' : '#F5F5F5',
+        onDisappear: () => { this.isFloatBtnSpeedSheetShow = false; }
+      })
+    }
     .width('100%')
-    .padding({ left: 20, right: 20, top: 12, bottom: 24 })
+    .scrollBar(BarState.Off)
+    .edgeEffect(EdgeEffect.Spring)
+    .padding({ top: 56, bottom: 24 })
     .bindSheet($$this.isWallpaperSheetShow, this.WallpaperSheetContent(), {
       height: '55%',
       dragBar: false,
