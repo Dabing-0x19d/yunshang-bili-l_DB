@@ -544,8 +544,9 @@ struct FavoritesPage {
     }
   }
 
-  private getTopOffset(): number {
-    return (this.hideStatusBar ? 0 : this.globalStatusBarHeight) + 56 + 8;
+  /** 顶部悬浮区总高（列表顶部避让：状态栏 + 悬浮行 40 + 间距，关注粉丝页面同款） */
+  private topInset(): number {
+    return (this.hideStatusBar ? 12 : (this.globalStatusBarHeight + 7)) + 40 + 8;
   }
 
   private async saveFloatBtnPrefs(): Promise<void> {
@@ -560,7 +561,40 @@ struct FavoritesPage {
     }
   }
 
-  /** 标题栏居中内容（由 titleBar.content.stackBuilder 嵌入 HdsNavDestination，使用 SegmentButton + 系统材料 uiMaterial） */
+  /** 胶囊分段项（关注粉丝页同款；选中主题色 + 底部下划线） */
+  @Builder
+  capsuleSegmentItem(idx: number, label: string) {
+    Column() {
+      Text(label)
+        .fontSize(13)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(this.activeTabIndex === idx
+          ? (this.cardCapsuleFollowTheme ? this.customThemeColor : '#FB7299')
+          : (this.isDarkMode ? '#FFFFFF' : '#000000'))
+        .width(62)
+        .height(22)
+        .textAlign(TextAlign.Center)
+      if (this.activeTabIndex === idx) {
+        Row()
+          .width(28)
+          .height(3)
+          .borderRadius(1.5)
+          .backgroundColor(this.cardCapsuleFollowTheme ? this.customThemeColor : '#FB7299')
+      }
+    }
+    .width(62)
+    .height(36)
+    .justifyContent(FlexAlign.Center)
+    .onClick(() => {
+      if (this.activeTabIndex !== idx) {
+        this.triggerHaptic();
+        this.onTabChange(idx);
+      }
+    })
+  }
+
+  /*
+  // ── 备用：SegmentButton 分段按钮版本（Hivid 同款，结合 uiMaterial.ImmersiveMaterial） ──
   @Builder
   segmentButtonBuilder() {
     if (this.pageMode === PageMode.FOLDER_LIST) {
@@ -595,6 +629,7 @@ struct FavoritesPage {
       .alignItems(VerticalAlign.Center)
     }
   }
+  */
 
   // ==================== Build ====================
 
@@ -627,15 +662,96 @@ struct FavoritesPage {
         .scale({ x: this.contentScale, y: this.contentScale })
         .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
 
+        // ── 顶部悬浮层：返回钮（左上）+ 切换胶囊（水平居中，恒展开），悬浮于列表之上（粉丝关注页面同款）──
+        Row() {
+          // 返回按钮：悬浮圆钮（与关注粉丝页同款 HdsMiniBarButton 材质）
+          Row() {
+            HdsMiniBarButton({
+              barWidth: 40,
+              barHeight: 40,
+              contentPadding: 4,
+              materialType: hdsMaterial.MaterialType.IMMERSIVE,
+              materialLevel: hdsMaterial.MaterialLevel.EXQUISITE,
+              barOverlap: true,
+              barPosition: BarPosition.End,
+              onButtonClick: (): void => {
+                if (this.pageMode === PageMode.FOLDER_DETAIL) {
+                  this.goBackToFolderList();
+                } else {
+                  router.back();
+                }
+              }
+            }) {
+              Image($r('app.media.ic_public_arrow_left_filled'))
+                .width(24).height(24)
+                .fillColor(this.isDarkMode ? '#FFFFFF' : '#000000')
+            }
+          }
+
+          Blank()
+            .layoutWeight(1)
+
+          // 收藏夹/订阅切换胶囊（恒展开分段选择器，与关注粉丝页同款材质）
+          Row() {
+            HdsMiniBarButton({
+              barWidth: 150,
+              barHeight: 40,
+              contentPadding: 4,
+              materialType: hdsMaterial.MaterialType.IMMERSIVE,
+              materialLevel: hdsMaterial.MaterialLevel.EXQUISITE,
+              barOverlap: true,
+              barPosition: BarPosition.End
+            }) {
+              if (this.pageMode === PageMode.FOLDER_LIST) {
+                Row() {
+                  this.capsuleSegmentItem(0, '收藏夹')
+                  this.capsuleSegmentItem(1, '订阅')
+                }
+                .padding({ left: 4, right: 4 })
+                .width('100%')
+                .height('100%')
+                .justifyContent(FlexAlign.Center)
+              } else {
+                Row() {
+                  Text(this.currentFolderTitle)
+                    .fontSize(15)
+                    .fontWeight(FontWeight.Medium)
+                    .fontColor(this.isDarkMode ? '#FFFFFF' : '#000000')
+                    .maxLines(1)
+                    .textOverflow({ overflow: TextOverflow.Ellipsis })
+                }
+                .padding({ left: 16, right: 16 })
+                .width('100%')
+                .height('100%')
+                .justifyContent(FlexAlign.Center)
+                .alignItems(VerticalAlign.Center)
+              }
+            }
+          }
+
+          Blank()
+            .layoutWeight(1)
+
+          // 右侧对称占位（与返回钮等宽）：保证胶囊按屏幕几何中心居中
+          Row()
+            .width(40)
+            .height(40)
+        }
+        .width('100%')
+        .alignItems(VerticalAlign.Center)
+        .padding({ left: 8, right: 8, top: this.hideStatusBar ? 12 : (this.globalStatusBarHeight + 7) })
+
         this.FloatButtonLayer()
 
         FloatingVideoButton()
       }
       .width('100%')
       .height('100%')
+      .alignContent(Alignment.TopStart)
       .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
     }
-    .hideBackButton(false)
+    .hideTitleBar(true)
+    .hideBackButton(true)
     .onBackPressed(() => {
       if (this.pageMode === PageMode.FOLDER_DETAIL) {
         this.goBackToFolderList();
@@ -645,6 +761,8 @@ struct FavoritesPage {
       return true;
     })
     .backgroundColor('transparent')
+    /*
+    // 备用：HdsNavDestination 标题栏渐变模糊 + SegmentButton 配置
     .titleBar({
       avoidLayoutSafeArea: true,
       padding: { start: LengthMetrics.vp(16), end: LengthMetrics.vp(16) },
@@ -690,6 +808,7 @@ struct FavoritesPage {
     })
     .titleMode(HdsNavDestinationTitleMode.MINI)
     .bindToScrollable([this.folderScroller, this.waterFlowScroller])
+    */
     .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 
@@ -787,7 +906,7 @@ struct FavoritesPage {
           this.SkeletonFolderCard()
         }
         .width('100%')
-        .margin({ top: idx < this.columnCount ? this.getTopOffset() : 0 })
+        .margin({ top: idx < this.columnCount ? this.topInset() : 0 })
       })
     }
     .columnsTemplate(this.columnCount === 2 ? '1fr 1fr' : '1fr')
@@ -887,7 +1006,7 @@ struct FavoritesPage {
               this.FolderCard(item)
             }
             .width('100%')
-            .margin({ top: index < this.columnCount ? this.getTopOffset() : 0 })
+            .margin({ top: index < this.columnCount ? this.topInset() : 0 })
             .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.96 })
           }, (item: FavFolderItem) => String(item.id))
         }
@@ -1021,7 +1140,7 @@ struct FavoritesPage {
               this.SkeletonVideoCard()
             }
             .width('100%')
-            .margin({ top: idx < this.columnCount ? this.getTopOffset() : 0 })
+            .margin({ top: idx < this.columnCount ? this.topInset() : 0 })
           })
         }
         .columnsTemplate(this.columnCount === 2 ? '1fr 1fr' : '1fr')
@@ -1050,7 +1169,7 @@ struct FavoritesPage {
                 this.VideoCard(item)
               }
               .width('100%')
-              .margin({ top: index < this.columnCount ? this.getTopOffset() : 0 })
+              .margin({ top: index < this.columnCount ? this.topInset() : 0 })
               .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.95 })
             }, (item: FavResourceItem) => String(item.id))
 
