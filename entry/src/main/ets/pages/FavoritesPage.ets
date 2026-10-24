@@ -14,7 +14,7 @@ import {
   formatCount
 } from '../api/FavoritesApi';
 import { getUserInfo, prefetchVideoDetail } from '../api/BilibiliApi';
-import { HdsNavigation, HdsNavigationTitleMode, ScrollEffectType, hdsMaterial } from '@kit.UIDesignKit';
+import { HdsNavDestination, HdsNavDestinationTitleMode, ScrollEffectType, hdsMaterial } from '@kit.UIDesignKit';
 import { deviceInfo } from '@kit.BasicServicesKit';
 import { motion } from '@kit.MultimodalAwarenessKit';
 import { HdsMiniBarButton } from '../components/infra/HdsMiniBarButton';
@@ -556,10 +556,10 @@ struct FavoritesPage {
   // ==================== Build ====================
 
   build() {
-    Stack() {
-      this.BackgroundLayer()
+    HdsNavDestination() {
+      Stack() {
+        this.BackgroundLayer()
 
-      HdsNavigation() {
         Column() {
           if (this.pageMode === PageMode.FOLDER_LIST) {
             if (!this.isLoggedIn) {
@@ -583,63 +583,69 @@ struct FavoritesPage {
         .padding({ top: this.globalStatusBarHeight + 56 })
         .opacity(this.contentOpacity)
         .scale({ x: this.contentScale, y: this.contentScale })
+
+        this.FloatButtonLayer()
+
+        FloatingVideoButton()
       }
-      .titleBar({
-        avoidLayoutSafeArea: true,
-        padding: { start: LengthMetrics.vp(16), end: LengthMetrics.vp(16) },
-        style: {
-          scrollEffectOpts: {
-            enableScrollEffect: true,
-            scrollEffectType: ScrollEffectType.GRADIENT_BLUR,
-            blurEffectiveStartOffset: LengthMetrics.vp(0),
-            blurEffectiveEndOffset: LengthMetrics.vp(20)
-          },
-          systemMaterialEffect: {
-            materialType: this.customMaterialType,
-            materialLevel: this.customMaterialLevel
-          },
-          originalStyle: {
-            backgroundStyle: {
-              backgroundColor: Color.Transparent
-            }
-          },
-          scrollEffectStyle: {
-            backgroundStyle: {
-              backgroundColor: this.isDarkMode ? 'rgba(30, 30, 30, 0.85)' : 'rgba(255, 255, 255, 0.85)'
-            }
-          }
-        },
-        content: {
-          title: {
-            mainTitle: ''
-          },
-          backIcon: {
-            action: (): void => {
-              if (this.pageMode === PageMode.FOLDER_DETAIL) {
-                this.goBackToFolderList();
-              } else {
-                router.back();
-              }
-            }
-          },
-          stackBuilder: (): void => {
-            this.segmentButtonBuilder();
-          }
-        }
-      })
-      .titleMode(HdsNavigationTitleMode.MINI)
-      .hideBackButton(false)
-      .mode(NavigationMode.Stack)
       .width('100%')
       .height('100%')
       .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
-
-      this.FloatButtonLayer()
-
-      FloatingVideoButton()
     }
-    .width('100%')
-    .height('100%')
+    .hideBackButton(false)
+    .onBackPressed(() => {
+      if (this.pageMode === PageMode.FOLDER_DETAIL) {
+        this.goBackToFolderList();
+        return true;
+      }
+      router.back();
+      return true;
+    })
+    .backgroundColor('transparent')
+    .titleBar({
+      avoidLayoutSafeArea: true,
+      padding: { start: LengthMetrics.vp(16), end: LengthMetrics.vp(16) },
+      style: {
+        scrollEffectOpts: {
+          enableScrollEffect: true,
+          scrollEffectType: ScrollEffectType.GRADIENT_BLUR,
+          blurEffectiveStartOffset: LengthMetrics.vp(0),
+          blurEffectiveEndOffset: LengthMetrics.vp(20)
+        },
+        systemMaterialEffect: {
+          materialType: this.customMaterialType,
+          materialLevel: this.customMaterialLevel
+        },
+        originalStyle: {
+          backgroundStyle: {
+            backgroundColor: Color.Transparent
+          }
+        },
+        scrollEffectStyle: {
+          backgroundStyle: {
+            backgroundColor: this.isDarkMode ? 'rgba(30, 30, 30, 0.85)' : 'rgba(255, 255, 255, 0.85)'
+          }
+        }
+      },
+      content: {
+        title: {
+          mainTitle: ''
+        },
+        backIcon: {
+          action: (): void => {
+            if (this.pageMode === PageMode.FOLDER_DETAIL) {
+              this.goBackToFolderList();
+            } else {
+              router.back();
+            }
+          }
+        },
+        stackBuilder: (): void => {
+          this.segmentButtonBuilder();
+        }
+      }
+    })
+    .titleMode(HdsNavDestinationTitleMode.MINI)
     .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 
