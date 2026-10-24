@@ -231,7 +231,7 @@ struct AboutPage {
                 .fontSize(16)
                 .fontColor($r('sys.color.font_primary'))
               Blank()
-              Text('基于原开源 Fork 项目二次改造')
+              Text('基于开源项目云上太学改造')
                 .fontSize(12)
                 .fontColor($r('sys.color.font_secondary'))
             }

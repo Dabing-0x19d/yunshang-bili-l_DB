@@ -183,6 +183,7 @@ export struct PersonalizationPage {
   /** ⭐ 小窗尺寸落盘防抖句柄 */
   private sizeSaveTimer_: number = -1;
   @State isFloatBtnSpeedSheetShow: boolean = false;
+  @State isOrientationMenuShow: boolean = false;
   private canvasCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D();
   private dataPreferences: preferences.Preferences | null = null;
 
@@ -1925,47 +1926,22 @@ export struct PersonalizationPage {
     }
   }
 
-  private showOrientationPicker(): void {
-    const primaryColor = this.isDarkMode ? '#FFFFFF' : '#000000';
-    const cancelColor = this.isDarkMode ? '#FFFFFF' : '#000000';
-    const textColor = this.isDarkMode ? '#FFFFFF' : '#000000';
-    const backgroundColor = this.isDarkMode ? 'rgba(44, 44, 44, 0.95)' : 'rgba(255, 255, 255, 0.95)';
-
-    AlertDialog.show({
-      title: '选择屏幕旋转模式',
-      message: '',
-      backgroundColor: backgroundColor,
-      buttons: [
-        {
-          value: '自动旋转',
-          fontColor: primaryColor,
-          action: () => {
-            this.saveOrientationLock('自动旋转');
-          }
-        },
-        {
-          value: '锁定竖屏',
-          fontColor: primaryColor,
-          action: () => {
-            this.saveOrientationLock('锁定竖屏');
-          }
-        },
-        {
-          value: '锁定横屏',
-          fontColor: primaryColor,
-          action: () => {
-            this.saveOrientationLock('锁定横屏');
-          }
-        },
-        {
-          value: '取消',
-          fontColor: cancelColor,
-          action: () => {
-            // 取消操作，关闭对话框
-          }
-        }
-      ]
-    });
+  @Builder
+  OrientationMenuBuilder() {
+    Menu() {
+      ForEach(['自动旋转', '锁定竖屏', '锁定横屏'], (option: string) => {
+        MenuItem({
+          content: option,
+          labelInfo: this.screenOrientationLock === option ? '当前' : ''
+        })
+          .selectIcon(this.screenOrientationLock === option)
+          .selected(this.screenOrientationLock === option)
+          .onClick(() => {
+            this.isOrientationMenuShow = false;
+            this.saveOrientationLock(option);
+          })
+      }, (option: string) => option)
+    }
   }
 
   private getCardItemBg(): ResourceColor {
@@ -2143,9 +2119,31 @@ export struct PersonalizationPage {
             // ── 其他 ──
             this.SectionHeader('其他')
             Column() {
-              this.SettingItemWithPicker('旋转', this.screenOrientationLock, () => {
-                this.showOrientationPicker();
-              })
+              Row() {
+                Text('旋转')
+                  .fontSize(16)
+                  .fontColor($r('sys.color.font_primary'))
+                  .layoutWeight(1)
+                  .maxLines(1)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis })
+                Text(this.screenOrientationLock)
+                  .fontSize(14)
+                  .fontColor($r('sys.color.font_secondary'))
+                  .maxLines(1)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis })
+                  .margin({ right: 8 })
+                SymbolGlyph($r('sys.symbol.chevron_right'))
+                  .fontSize(14)
+                  .fontColor([$r('sys.color.icon_secondary')])
+                  .bindMenu(this.isOrientationMenuShow, this.OrientationMenuBuilder(), {
+                    onDisappear: () => { this.isOrientationMenuShow = false; }
+                  })
+              }
+              .width('100%')
+              .height(56)
+              .padding({ left: 16, right: 16 })
+              .alignItems(VerticalAlign.Center)
+              .onClick(() => { this.isOrientationMenuShow = true; })
             }
             .width('94%')
             .borderRadius(15)
