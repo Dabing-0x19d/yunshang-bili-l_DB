@@ -1,6 +1,6 @@
 // UpSpacePage.ets — UP主个人空间页
-import { router, mediaquery, display, window, SegmentButton, SegmentButtonOptions } from '@kit.ArkUI';
-import { hdsMaterial, HdsTabs } from '@kit.UIDesignKit';
+import { router, mediaquery, display, window, SegmentButton, SegmentButtonOptions, LengthMetrics } from '@kit.ArkUI';
+import { hdsMaterial, HdsTabs, HdsNavDestination, ScrollEffectType } from '@kit.UIDesignKit';
 import { logInfo, logWarn, logError, errMsg } from '../utils/Logger';
 import { common } from '@kit.AbilityKit';
 import { pasteboard } from '@kit.BasicServicesKit';
@@ -302,11 +302,11 @@ struct UpSpacePage {
       this.tabOpt = SegmentButtonOptions.capsule({
         buttons: [{ text: '投稿' }, { text: '动态' }],
         fontColor: '#999999',
-        selectedFontColor: accent,
+        selectedFontColor: '#FFFFFF',
         fontWeight: FontWeight.Normal,
         selectedFontWeight: FontWeight.Medium,
         backgroundColor: Color.Transparent,
-        selectedBackgroundColor: selBg,
+        selectedBackgroundColor: accent,
         fontSize: narrow ? 12 : 13,
         selectedFontSize: narrow ? 12 : 13,
         // 按钮内边距左右 12：防"投稿/动态"出省略号；上下 5 配合内容高 34
@@ -315,11 +315,11 @@ struct UpSpacePage {
       this.sortOpt = SegmentButtonOptions.capsule({
         buttons: [{ text: '最新' }, { text: '播放' }, { text: '收藏' }],
         fontColor: '#999999',
-        selectedFontColor: accent,
+        selectedFontColor: '#FFFFFF',
         fontWeight: FontWeight.Normal,
         selectedFontWeight: FontWeight.Medium,
         backgroundColor: Color.Transparent,
-        selectedBackgroundColor: selBg,
+        selectedBackgroundColor: accent,
         fontSize: narrow ? 11 : 12,
         selectedFontSize: narrow ? 11 : 12,
         buttonPadding: narrow ? { top: 4, right: 11, bottom: 4, left: 11 } : { top: 5, right: 12, bottom: 5, left: 12 },
@@ -659,6 +659,7 @@ struct UpSpacePage {
   }
 
   build() {
+    HdsNavDestination() {
     Stack() {
       // ── 背景层：全局壁纸（默认壁纸分深/浅模式；与搜索页等其余页面同款三分支）──
       if (this.wallpaper === 'builtin') {
@@ -763,7 +764,52 @@ struct UpSpacePage {
   .width('100%').height('100%')
   .backgroundColor(Color.Transparent)
   .alignContent(Alignment.TopStart);
-}
+    }
+    .hideBackButton(false)
+    .onBackPressed(() => {
+      this.goBack();
+      return true;
+    })
+    .backgroundColor('transparent')
+    .titleBar({
+      avoidLayoutSafeArea: true,
+      padding: { start: LengthMetrics.vp(16), end: LengthMetrics.vp(16) },
+      style: {
+        scrollEffectOpts: {
+          enableScrollEffect: true,
+          scrollEffectType: ScrollEffectType.GRADIENT_BLUR
+        },
+        systemMaterialEffect: {
+          materialType: hdsMaterial.MaterialType.IMMERSIVE,
+          materialLevel: hdsMaterial.MaterialLevel.EXQUISITE
+        },
+        originalStyle: {
+          backgroundStyle: { backgroundColor: 'transparent' },
+          contentStyle: {
+            titleStyle: {
+              mainTitleColor: this.isDarkMode ? '#FFFFFF' : '#000000'
+            }
+          }
+        },
+        scrollEffectStyle: {
+          backgroundStyle: { backgroundColor: 'transparent' },
+          contentStyle: {
+            titleStyle: {
+              mainTitleColor: this.isDarkMode ? '#FFFFFF' : '#000000'
+            }
+          }
+        }
+      },
+      content: {
+        title: { mainTitle: '个人空间' },
+        backIcon: {
+          action: () => {
+            this.goBack();
+          }
+        }
+      }
+    })
+  }
 
   /**
    * A1 页眉（竖屏，随列表滚走）：mono 标签 + 头像/衬线名/认证/LV + 签名 + 数据条 + 全宽关注条
@@ -891,7 +937,7 @@ struct UpSpacePage {
       .width('100%')
       .padding({ left: 16, right: 16, top: 14, bottom: 16 })
       .backgroundColor(this.getCardItemBg())
-      .borderRadius(this.cardListBorderRadius)
+      .borderRadius(15)
       .border({ width: this.cardBorderWidth, color: this.getCardItemBorder() })
       .shadow({ radius: 4, color: '#10000000', offsetX: 0, offsetY: 2 })
     }
@@ -989,6 +1035,9 @@ struct UpSpacePage {
           materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
         }
       })
+      .scrollable(false)
+      .animationDuration(0)
+      .backgroundColor(Color.Transparent)
       .clip(false)
 
       Blank()
@@ -1012,6 +1061,9 @@ struct UpSpacePage {
             materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
           }
         })
+        .scrollable(false)
+        .animationDuration(0)
+        .backgroundColor(Color.Transparent)
         .clip(false)
       }
     }
@@ -1024,14 +1076,14 @@ struct UpSpacePage {
    *  ⚠️ 高度显式 44（不是 '100%'）：条内系统 ~3vp 内缩在底部，写满会整体上浮（"选中胶囊靠上"根因） */
   @Builder
   segTabContent() {
-    Stack() {
+    Stack({ alignContent: Alignment.Center }) {
       SegmentButton({
         options: this.tabOpt,
         selectedIndexes: $tabSelIdx,
         onItemClicked: (idx: number) => { this.switchTab(idx === 0 ? 'video' : 'dynamic'); }
       })
         .width('100%')
-        .height(34)
+        .height('100%')
     }
     .width('100%')
     .height('100%')
@@ -1040,14 +1092,14 @@ struct UpSpacePage {
   /** 排序 玻璃胶囊内容（同上） */
   @Builder
   segSortContent() {
-    Stack() {
+    Stack({ alignContent: Alignment.Center }) {
       SegmentButton({
         options: this.sortOpt,
         selectedIndexes: $sortSelIdx,
         onItemClicked: (idx: number) => { this.switchOrder(ORDER_OPTIONS[idx].key); }
       })
         .width('100%')
-        .height(34)
+        .height('100%')
     }
     .width('100%')
     .height('100%')
@@ -1166,7 +1218,7 @@ struct UpSpacePage {
         .alignItems(HorizontalAlign.Start)
         .padding(16)
         .backgroundColor(this.getCardItemBg())
-        .borderRadius(this.cardListBorderRadius)
+        .borderRadius(15)
         .border({ width: this.cardBorderWidth, color: this.getCardItemBorder() })
         .shadow({ radius: 4, color: '#10000000', offsetX: 0, offsetY: 2 })
         // ⭐ 上下自适应：至少撑满 rail 可用高度（内容超出时随内容增长、Scroll 兜底滚动）
