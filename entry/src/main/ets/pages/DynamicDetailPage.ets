@@ -1039,6 +1039,7 @@ struct DynamicDetailPage {
         }
       })
         .margin({ top: 12 })
+        .width('100%')
 
       // 统计行（与动态页同款：视频卡内部已含播放/弹幕/点赞，故仅非视频卡显示）
       if (!it.video) {
@@ -1075,6 +1076,7 @@ struct DynamicDetailPage {
       }
     }
     .width('100%')
+    .alignItems(HorizontalAlign.Start)
     .padding(12)
     // 圆角跟随"卡片样式"设置（与动态页 cardListBorderRadius 同一个值，两页才一致）
     .borderRadius(this.cardListBorderRadius)

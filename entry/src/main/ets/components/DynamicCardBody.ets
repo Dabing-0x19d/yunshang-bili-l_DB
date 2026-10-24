@@ -108,7 +108,7 @@ export struct DynamicCardBody {
   dynVideoCard(item: SpaceDynamicItem) {
     Column() {
       if (item.text) {
-        this.dynTextSegmentsBuilder(item, true, 12)
+        this.dynTextSegmentsBuilder(item, false, 12)
       }
       if (item.video) {
         Column() {
@@ -546,7 +546,7 @@ export struct DynamicCardBody {
   dynPgcCard(item: SpaceDynamicItem) {
     Column() {
       if (item.text) {
-        this.dynTextSegmentsBuilder(item, true, 8)
+        this.dynTextSegmentsBuilder(item, false, 8)
       }
       if (this.pgcCoverOf(item) || this.pgcTitleOf(item)) {
         // ---- 横版封面（16:9，动态页卡片统一横版比例）----
