@@ -170,10 +170,11 @@ struct AboutPage {
           // 应用图标与信息
           Column() {
             Image($r('app.media.startIcon'))
-              .width(96)
-              .height(96)
-              .borderRadius(20)
-              .margin({ top: 28, bottom: 14 })
+              .width(140)
+              .height(140)
+              .borderRadius(28)
+              .objectFit(ImageFit.Contain)
+              .margin({ top: 24, bottom: 16 })
 
             Text('Bili')
               .fontSize(24)
