@@ -624,10 +624,12 @@ AppStorage.setOrCreate('shrinkWindowSize', storedShrinkWindowSize);
     
     if (this.activeTab === index) {
       // 如果已经在顶部，则刷新当前页面；否则滚动到顶部
-      // 动态 Tab(1) 使用自己的滚动偏移，首页使用 homeScrollOffset
+      // 动态 Tab(1) 使用自己的滚动偏移，首页使用 homeScrollOffset，消息使用 msgScrollOffset
       const currentOffset = index === 1
         ? Math.abs(AppStorage.get<number>('dynScrollOffset') ?? 0)
-        : Math.abs(this.homeScrollOffset);
+        : index === 2
+          ? Math.abs(AppStorage.get<number>('msgScrollOffset') ?? 0)
+          : Math.abs(this.homeScrollOffset);
       logInfo(`Current scroll offset: ${currentOffset}, threshold check: ${currentOffset < 5}`);
       
       if (currentOffset < 5) {
@@ -640,8 +642,12 @@ AppStorage.setOrCreate('shrinkWindowSize', storedShrinkWindowSize);
           // 动态页刷新信号
           let refreshFlag = AppStorage.get<number>('refreshDynamicsFlag') ?? 0;
           AppStorage.set('refreshDynamicsFlag', refreshFlag + 1);
+        } else if (index === 2) {
+          // 消息页刷新信号
+          let refreshFlag = AppStorage.get<number>('refreshMsgFlag') ?? 0;
+          AppStorage.set('refreshMsgFlag', refreshFlag + 1);
         }
-        // 消息页/我的页暂不支持刷新
+        // 我的页暂不支持刷新
       } else {
         // 不在顶部，滚动到顶部
         logInfo('Not at top, triggering scroll to top');
@@ -1376,14 +1382,16 @@ struct TabIconComponent {
   @StorageProp('isDarkMode') isDarkMode: boolean = false;
   @StorageLink('homeScrollOffset') homeScrollOffset: number = 0;
   @StorageProp('dynScrollOffset') dynScrollOffset: number = 0;
+  @StorageProp('msgScrollOffset') msgScrollOffset: number = 0;
   @State isPressing: boolean = false;
   onTabClick?: (index: number) => void;
   private readonly SCROLL_THRESHOLD: number = 200;
 
-  /** 当前 Tab 是否超过阈值（滚动后显示回顶图标）：首页用 homeScrollOffset，动态用 dynScrollOffset */
+  /** 当前 Tab 是否超过阈值（滚动后显示回顶图标）：首页用 homeScrollOffset，动态用 dynScrollOffset，消息用 msgScrollOffset */
   private isOverScrollThreshold(): boolean {
     if (this.index === 0) return this.homeScrollOffset > this.SCROLL_THRESHOLD;
     if (this.index === 1) return this.dynScrollOffset > this.SCROLL_THRESHOLD;
+    if (this.index === 2) return this.msgScrollOffset > this.SCROLL_THRESHOLD;
     return false;
   }
 

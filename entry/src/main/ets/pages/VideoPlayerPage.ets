@@ -1,5 +1,6 @@
-﻿// VideoPlayerPage.ets
-import { router, curves, SegmentButton, SegmentButtonOptions, componentUtils, display, KeyboardAvoidMode, LengthMetrics } from '@kit.ArkUI';
+// VideoPlayerPage.ets
+import { router, curves, SegmentButton, SegmentButtonOptions, componentUtils, display, KeyboardAvoidMode, LengthMetrics, PiPWindow } from '@kit.ArkUI';
+
 import { logInfo, logWarn, logError, errMsg } from '../utils/Logger';
 import { getVideoPlayUrl, invalidatePlayUrlCache, PlayUrlResult, getVideoDetail, getVideoComments, getCommentReplies, VideoDetail, VideoDetailOwner, VideoDetailStat, CommentItem, getVideoUserStatus, VideoPageItem, getFollowStatus, modifyFollow, clearFollowedMidsCache, getUserInfo, UserInfo, getPgcPlayUrl, getPgcSeasonInfo, getPgcEpisodeInfo, getPgcSeasonInfoByEpId, PgcSeasonInfo, PgcEpisode, getRelatedVideos, addVideoComment, uploadCommentImage, sendDanmakuVideo, SeasonEpisode, SeasonSection, UgcSeason } from '../api/BilibiliApi';
 import { CommentInputBar, CommentImageDraft, CommentInputBarCtrl } from '../components/CommentInputBar';
@@ -14,6 +15,7 @@ import { preferences } from '@kit.ArkData';
 import { common, ConfigurationConstant } from '@kit.AbilityKit';
 import deviceInfo from '@ohos.deviceInfo';
 import { StatusBarUtils } from '../utils/StatusBarUtils';
+import { applyCardStyleModeArchive } from '../utils/CardStyleMode';
 import AVCastPicker from '@ohos.multimedia.avCastPicker';
 import { AVCastPickerState } from '@ohos.multimedia.avCastPickerParam';
 import { motion } from '@kit.MultimodalAwarenessKit';
@@ -48,6 +50,16 @@ import { OfflineCacheService } from '../services/OfflineCacheService';
 import { OfflineCacheItem, CacheStatus } from '../model/OfflineCacheItem';
 // ⭐ 本地文件播放需用文件描述符（createMediaSourceWithFd），fileUri 路径形式 AVPlayer 不识别
 import { fileIo as fs } from '@kit.CoreFileKit';
+/**
+ * ⭐ 4K 快速起播开关（用户决定默认关闭，2026-10-18）
+ *
+ * 开启时：4K 视频先用 1080P+ 出帧（快 3~5 秒），首帧后 2 秒预热、约 5~8 秒切回 4K。
+ * 关闭时：起播直接按设置里的最高画质加载（首帧慢，但不存在"看到一半切档卡一下"）。
+ *
+ * 为什么关：单播放器架构下换轨必须重建 AVPlayer，切换必然中断 1~3 秒，
+ * 实测无法做到无感（AVPlayer 不支持播放中切轨，见 DashPlayerBridge 的多 Representation 实验）。
+ */
+const FAST_START_4K: boolean = false;
 
 // B站视频详情API响应接口
 interface VideoDetailView {
@@ -92,7 +104,15 @@ interface MinimizedVideoState {
   seasonId: number;               // ⭐ PGC 季 id
 }
 
-PersistentStorage.persistProp('defaultVideoQn', 116)
+// ⚠️ 不要用 PersistentStorage 持久化 defaultVideoQn（原为 persistProp('defaultVideoQn', 116)）：
+//    它会把“上一次运行的内存值”固化，与用户在设置里保存到 preferences 的值冲突 ——
+//    实测「默认 4K」被快速起播的自动升档写成 1080P 后，重启仍读到 1080P，
+//    而 preferences 里明明还是 4K。权威来源改为 preferences（Index.aboutToAppear 启动时恢复）。
+// ⚠️ 必须判空后再写：AppStorage.setOrCreate 是「存在则更新」，
+//    无条件调用会把 Index 刚恢复的 120 覆盖成兜底值 116（实测踩过）。
+if (AppStorage.get<number>('defaultVideoQn') === undefined) {
+  AppStorage.setOrCreate<number>('defaultVideoQn', 116);
+}
 PersistentStorage.persistProp('bgp', false)
 PersistentStorage.persistProp('phoneLayoutToggle', false)
 PersistentStorage.persistProp('lightsOffHideOnly', false)
@@ -1050,6 +1070,11 @@ struct VideoPlayerPage {
   @StorageLink('appBackgroundTimestamp') @Watch('onAppBackgroundConfirmed') appBgTimestamp: number = 0
   // ⭐ 应用是否已切后台（EntryAbility.onBackground/onForeground 维护）：区分「跳页」与「真后台」
   @StorageLink('appInBackground') appInBackground: boolean = false
+  // ── 画中画（自动小窗 · 页面模式）：回桌面时播放中自动弹小窗，以本页 XComponent 为小窗载体 ──
+  @StorageLink('autoPip') autoPip: boolean = true
+  private pipCtrl_: PiPWindow.PiPController | null = null
+  private pipCreating_: boolean = false
+  private pipActive_: boolean = false // 小窗展示中（ABOUT_TO_START ~ STOPPED/还原）
 
   // ⭐ 选集状态
   @State currentPageIndex: number = 0  // 当前分P索引
@@ -1467,6 +1492,10 @@ struct VideoPlayerPage {
         pref.put('isDarkMode', newMode).then(() => {
           pref.flush();
         });
+        // 卡片样式「深浅色独立」：装载新模式档案（播放页背景已入档，此处装载后立即生效）
+        if (AppStorage.get<boolean>('cardStylePerMode') === true) {
+          applyCardStyleModeArchive(pref, newMode);
+        }
       });
     } catch (e) {
       logError(`保存深色模式设置失败: ${e}`);
@@ -2081,6 +2110,14 @@ struct VideoPlayerPage {
 
   // ⭐ 切换布局（横屏非全屏模式）
   private toggleLayoutSwap(): void {
+    // ⭐ 兜底自愈：fsEntering 的语义是"进入全屏旋转期间把常驻层钉在快照矩形上"，
+    //   非全屏且不在旋转中却为 true 一定是被某条手势回弹路径漏掉的脏值（见 startFSAnimation 回弹分支注释）。
+    //   脏值的唯一表现就是本节要修的 bug：布局换了、视频画面不换位置。这里再拦一道，
+    //   让任何历史/将来漏掉的路径在用户下一次点「切换布局」时也能自愈。
+    if (!this.fs && !this.rotationInProgress && this.fsEntering) {
+      logWarn('[布局切换] 检测到 fsEntering 脏值（手势回弹未复位），先复位再切换布局');
+      this.fsEntering = false;
+    }
     this.layoutSwapScale = 0.9;
     this.layoutSwapPressed = true;
     setTimeout(() => {
@@ -2346,6 +2383,13 @@ struct VideoPlayerPage {
     return this.vi.cover || undefined;
   }
 
+  // ⭐ 播放页导航按钮与横屏布局度量：按钮行尺寸与 buildLandscape 同源，
+  //    改按钮大小时 updateLSVSize 的高度预留自动跟随
+  private readonly NAV_BTN_SIZE: number = 51;          // 圆形导航按钮直径（宽=高，圆角=直径/2）
+  private readonly NAV_BTN_CAPSULE_W: number = 90;     // "详情·评论"胶囊按钮宽度（高同 NAV_BTN_SIZE）
+  private readonly NAV_BTN_ROW_MARGIN: number = 6;     // 按钮行上下外边距
+  private readonly LAND_VIDEO_W_RATIO: number = 0.67;  // 横屏视频宽度占屏宽比例
+
   updateLSVSize(): void {
     if (!this.isLs) return;
     const arV = Number.isFinite(this.ar) && this.ar > 0 ? this.ar : 9 / 16;
@@ -2355,9 +2399,17 @@ struct VideoPlayerPage {
       this.lsvh = videoH;
       this.lsvw = videoH * arV;
     } else {
-      // 横屏视频：宽度占67%，高度按实际宽高比
-      this.lsvw = this.cw * 0.67;
+      // 横屏视频：宽度按比例占屏宽，高度按实际宽高比；超出可用高度时以高度限制大小
+      // 可用高度预留视频下方按钮行空间（NAV_BTN_SIZE + 上下 NAV_BTN_ROW_MARGIN），
+      // 否则近1:1/4:3视频会把按钮行（深浅色切换等）挤出屏幕
+      const btnRowH = this.NAV_BTN_SIZE + 2 * this.NAV_BTN_ROW_MARGIN;
+      const maxH = Math.max(1, this.ch - 2 * this.cardMargin - btnRowH);
+      this.lsvw = this.cw * this.LAND_VIDEO_W_RATIO;
       this.lsvh = this.lsvw / arV;
+      if (this.lsvh > maxH) {
+        this.lsvh = maxH;
+        this.lsvw = maxH * arV;
+      }
     }
   }
 
@@ -2497,6 +2549,14 @@ struct VideoPlayerPage {
   private lastHapticPct_: number = -1 // 上次震动时的百分比 (0-100)，拖动时按档位震动
   // ⭐ 初始播放进度（从历史记录恢复）
   private initialProgress_: number = 0
+  // ⭐ 4K 快速起播：本次为「先出帧」而降到的低档（0=未降级）
+  private fastStartQn_: number = 0
+  // ⭐ 4K 快速起播：首帧已出后要升回的目标档（0=无需升级）
+  private upgradeQn_: number = 0
+  // ⭐ 4K 快速起播：升级定时器
+  private upgradeTimer_: number = -1
+  // ⭐ 快速起播的自动升档正在执行（用于阻止它把 actualQn 写回用户的默认画质设置）
+  private autoUpgradeInProgress_: boolean = false
   // ⭐ 长按文本选取弹窗（简介等）：openCustomDialog 返回的对话框 id，用于关闭
   private textSelectDialogId_: number = -1
   // ⭐ seek完成Promise的resolve函数
@@ -3009,6 +3069,18 @@ struct VideoPlayerPage {
       logInfo(`[VideoPlayer] PGC 模式: epId=${this.epId_}, seasonId=${this.seasonId_}, cid=${this.vi.cid}, title=${this.vi.title}`);
     }
 
+    // ⭐ 默认画质必须在 aid/bvid 分支【之前】应用：
+    //    aid 入口（首页卡片/推荐/搜索）会 `initFromAid() → return`，
+    //    旧位置在 return 之后 ⇒ 从首页进播放页永远用初始值 116，
+    //    用户在设置里选的 4K（defaultVideoQn=120）形同虚设（实测 BV1qaJ86aEBd）。
+    const dq = AppStorage.get<number>('defaultVideoQn');
+    if (dq !== undefined) {
+      this.qn = dq;
+      const it = this.ql_.find(q => q.qn === dq);
+      this.ql = it ? it.label : '1080P60';
+      logInfo(`[VideoPlayer] 应用默认画质: qn=${dq} (${this.ql})`);
+    }
+
     // 如果没有bvid、或者bvid是数字（实际上是aid），通过aid获取视频信息
     // 心跳上报需要真实的BV格式bvid，否则B站API返回-400
     const isNumericBvid: boolean = /^\d+$/.test(this.vi.bvid);
@@ -3025,12 +3097,6 @@ struct VideoPlayerPage {
 
     if (isNaN(this.vi.cid)) {
       this.vi.cid = 0;  // 默认cid，后续会通过API获取
-    }
-    const dq = AppStorage.get<number>('defaultVideoQn');
-    if (dq !== undefined) {
-      this.qn = dq;
-      const it = this.ql_.find(q => q.qn === dq);
-      this.ql = it ? it.label : '1080P60';
     }
     this.readSystemVolume();
     const sm = AppStorage.get<boolean>('globalMuted');
@@ -3248,12 +3314,8 @@ struct VideoPlayerPage {
       logInfo(`[initFromAid] 获取到bvid: ${this.vi.bvid}, cid=${this.vi.cid}`);
 
       // 继续正常的初始化流程
-      const dq = AppStorage.get<number>('defaultVideoQn');
-      if (dq !== undefined) {
-        this.qn = dq;
-        const it = this.ql_.find(q => q.qn === dq);
-        this.ql = it ? it.label : '1080P60';
-      }
+      // ⭐ 默认画质已在 aboutToAppear 的公共段应用（aid 分支之前），此处不再重复读，
+      //    否则两处读取的时机差异会让「首页入口用 116、历史入口用 120」这种不一致重现。
       this.readSystemVolume();
       const sm = AppStorage.get<boolean>('globalMuted');
       if (sm !== undefined) this.mute = sm;
@@ -3303,6 +3365,11 @@ struct VideoPlayerPage {
   onPageHide(): void {
     // ⭐ 页面隐藏即释放屏幕常亮（后台播放/跳页时屏幕可正常锁屏）
     this.mw?.setWindowKeepScreenOn(false).catch(() => {});
+    // ⭐ 自动画中画：切后台且武装中 → 保持播放，画面随 XComponent 迁入系统小窗
+    if (this.appInBackground && this.pipCtrl_ && this.pipArmAllowed_()) {
+      logInfo('[VideoPlayer] onPageHide → 自动小窗模式，保持播放');
+      return;
+    }
     // 播放器已转移至 PlayerService（最小化场景），页面不再控制播放
     if (PlayerService.getInstance().hasActivePlayer) {
       logInfo('[VideoPlayer] onPageHide → 播放器已转移至 PlayerService，跳过');
@@ -3341,17 +3408,21 @@ struct VideoPlayerPage {
    */
   onAppBackgroundConfirmed(): void {
     if (this.appBgTimestamp === 0) return;
-    if (!this.bgpPausedByPageHide_) return;
-    this.bgpPausedByPageHide_ = false;
-    if (!this.bgp) return;
-    if (!this.av) return;
-    logInfo('[VideoPlayer] onBackground 确认 → 后台播放模式，恢复播放');
-    if (this.av.state === 'paused') {
-      this.av.play();
-      this.avAudio?.play();
-      this.play = true;
+    if (this.bgpPausedByPageHide_) {
+      this.bgpPausedByPageHide_ = false;
+      if (this.bgp && this.av) {
+        logInfo('[VideoPlayer] onBackground 确认 → 后台播放模式，恢复播放');
+        if (this.av.state === 'paused') {
+          this.av.play();
+          this.avAudio?.play();
+          this.play = true;
+        }
+        LiveViewHelper.updatePlayState(true);
+      }
     }
-    LiveViewHelper.updatePlayState(true);
+    // ⭐ 自动画中画：切后台后同步武装；bgp 恢复播放是异步的，安排重试补武装
+    this.updatePipAutoArm_();
+    this.armPipWhenPlaying_(5);
   }
 
   /**
@@ -3371,6 +3442,8 @@ struct VideoPlayerPage {
     }
     // ⭐ 屏幕常亮：回到页面按当前播放状态恢复
     this.updateKeepScreen();
+    // ⭐ 自动画中画：页面恢复可见，重新评估武装状态
+    this.updatePipAutoArm_();
     // ⭐ 从缓存页返回时同步缓存提示条：暂停后「继续」走的是 resume() 的新下载，
     // 最初 svc.download 的回调已结束，须按条目真实状态刷新完成文案
     this.syncCacheHintStatus();
@@ -4672,6 +4745,18 @@ struct VideoPlayerPage {
   release() {
     // ⭐ 停止同步定时器
     this.stopSyncTimer();
+    // ⭐ 自动画中画：先解除武装再关小窗（防止页面销毁后回桌面系统拉起空白小窗）
+    try { this.pipCtrl_?.setAutoStartEnabled(false); } catch (e) { }
+    if (this.pipActive_ && this.pipCtrl_) {
+      this.pipCtrl_.stopPiP().catch(() => { });
+      this.pipActive_ = false;
+    }
+    // ⭐ 4K 快速起播的升级定时器：释放时必须清掉，否则会在页面销毁后再去切档
+    if (this.upgradeTimer_ >= 0) {
+      clearTimeout(this.upgradeTimer_);
+      this.upgradeTimer_ = -1;
+    }
+    this.upgradeQn_ = 0;
     if (this.av) {
       this.av.off('stateChange');
       this.av.off('timeUpdate');
@@ -4756,9 +4841,11 @@ struct VideoPlayerPage {
           }
         }
       } else {
+      // ⭐ 4K 快速起播：4K + 有续播点时先用 1080P+ 请求，首帧出得早（见 pickFastStartQn）
+      const startQn: number = this.pickFastStartQn();
       const result: PlayUrlResult = this.isPgc_
-        ? await getPgcPlayUrl(this.epId_, this.vi.cid, this.qn, this.seasonId_)
-        : await getVideoPlayUrl(this.vi.bvid, this.vi.cid, this.qn);
+        ? await getPgcPlayUrl(this.epId_, this.vi.cid, startQn, this.seasonId_)
+        : await getVideoPlayUrl(this.vi.bvid, this.vi.cid, startQn);
       const url = result.url;
       if (!url) throw new Error('no url');
       // ⭐ 服务端续播点兜底：路由未带进度（从番剧页/推荐/搜索进入）时，用该集自己的观看位置恢复
@@ -5010,8 +5097,15 @@ struct VideoPlayerPage {
             }
           }
           break;
+        case 'playing':
+        case 'paused':
+          // ⭐ 自动画中画：以真实播放状态驱动武装（自动起播不经 togglePP，
+          //   进入 playing 即武装，确保回桌面时 auto-start 已就绪）
+          this.updatePipAutoArm_();
+          break;
         case 'completed':
           this.play = false;
+          this.updatePipAutoArm_();
           break;
         case 'error':
           this.err = '播放器内部错误';
@@ -5039,6 +5133,10 @@ struct VideoPlayerPage {
       }
       // ⭐ 首帧后：1080w 封面预解码挪到这里，不再与起播抢网络/解码线程
       this.predecodeCover();
+      // ⭐ 4K 快速起播（默认关闭）：开启时才在首帧后安排升回 4K
+      if (FAST_START_4K) {
+        this.scheduleUpgradeToWantedQn();
+      }
     });
     this.av.on('timeUpdate', (t: number) => {
       if (!this.sk_) {
@@ -5064,6 +5162,8 @@ struct VideoPlayerPage {
         this.updateIsLandscapeVertical();
         this.updateLSVSize();
         this.updateVideoSize();
+        // ⭐ 自动画中画：同步小窗宽高比
+        try { this.pipCtrl_?.updateContentSize(w, h); } catch (e) { }
       } else {
         // 视频尺寸为0，可能是DASH模式下视频流尚未就绪
         logWarn('[VideoPlayer] Video size is 0x0, video stream may not be ready');
@@ -5104,6 +5204,9 @@ struct VideoPlayerPage {
 
     this.sId = id;
 
+    // ⭐ 自动画中画：创建画中画控制器（以本页 XComponent 为小窗载体）
+    this.ensurePipController_();
+
     // 初始化播放器（如果尚未初始化）
     if (!this.av && !this.initPInProgress_) {
       this.initP();
@@ -5112,6 +5215,105 @@ struct VideoPlayerPage {
       this.bindS();
     }
     // ⭐ XComponent 常驻单实例：surface 不再随布局分支切换重建，无需换 surface/强制出帧兜底
+  }
+
+  // ═══════════════════ 画中画（自动小窗 · 页面模式）═══════════════════
+  // 以本页 XComponent 为小窗载体：回桌面时播放中由系统自动拉起，画面随组件迁入小窗。
+  // 仅播放中的本页可武装 setAutoStartEnabled；暂停/页面销毁即解除（防空白小窗）。
+
+  /** 是否允许武装「回桌面自动小窗」：开关开 + 真实播放中 + 小窗未开 */
+  private pipArmAllowed_(): boolean {
+    return this.autoPip && this.play && this.av?.state === 'playing' && !this.pipActive_;
+  }
+
+  /** 同步自动小窗武装状态（播放状态/切后台/页面显隐变化后调用） */
+  private updatePipAutoArm_(): void {
+    try {
+      this.pipCtrl_?.setAutoStartEnabled(this.pipArmAllowed_());
+    } catch (e) {
+      logWarn('[PiP] setAutoStartEnabled 失败:', e);
+    }
+  }
+
+  /** bgp 恢复播放是异步的：等 av 真实进入 playing 后补武装（最多重试 retries 次 × 200ms） */
+  private armPipWhenPlaying_(retries: number): void {
+    if (!this.pipCtrl_ || this.pipActive_ || !this.autoPip || !this.play) return;
+    if (this.av && this.av.state === 'playing') {
+      this.updatePipAutoArm_();
+      return;
+    }
+    if (retries <= 0) return;
+    setTimeout(() => this.armPipWhenPlaying_(retries - 1), 200);
+  }
+
+  /** 同步小窗面板播放/暂停按钮状态 */
+  private syncPipControlStatus_(): void {
+    if (!this.pipActive_ || !this.pipCtrl_) return;
+    try {
+      this.pipCtrl_.updatePiPControlStatus(PiPWindow.PiPControlType.VIDEO_PLAY_PAUSE,
+        this.play ? PiPWindow.PiPControlStatus.PLAY : PiPWindow.PiPControlStatus.PAUSE);
+    } catch (e) { }
+  }
+
+  /** 创建（幂等）画中画控制器：以本页 XComponent 为小窗载体 */
+  private async ensurePipController_(): Promise<void> {
+    if (this.pipCtrl_ || this.pipCreating_) return;
+    if (!PiPWindow.isPiPEnabled()) {
+      logWarn('[PiP] 当前设备不支持画中画');
+      return;
+    }
+    this.pipCreating_ = true;
+    try {
+      const config: PiPWindow.PiPConfiguration = {
+        context: this.getUIContext().getHostContext() as common.UIAbilityContext,
+        componentController: this.xc,
+        templateType: PiPWindow.PiPTemplateType.VIDEO_PLAY,
+        contentWidth: this.vw > 0 ? this.vw : 1280,
+        contentHeight: this.vh > 0 ? this.vh : 720,
+      };
+      this.pipCtrl_ = await PiPWindow.create(config);
+      this.pipCtrl_.on('stateChange', (state: PiPWindow.PiPState, reason: string) => {
+        this.onPipStateChange_(state, reason);
+      });
+      this.pipCtrl_.on('controlPanelActionEvent', (event: PiPWindow.PiPActionEventType, status?: number) => {
+        if (event !== 'playbackStateChanged') return;
+        const playing = status === 1;
+        logInfo(`[PiP] playbackStateChanged: playing=${playing}`);
+        // 小窗面板播放/暂停：经 togglePP 与页面状态同步
+        if (playing !== this.play) {
+          this.togglePP();
+        }
+      });
+      logInfo('[PiP] 画中画控制器创建成功（页面 XComponent 模式）');
+      this.updatePipAutoArm_();
+    } catch (e) {
+      logError('[PiP] 创建画中画控制器失败:', e);
+    } finally {
+      this.pipCreating_ = false;
+    }
+  }
+
+  /** 画中画生命周期状态变化 */
+  private onPipStateChange_(state: PiPWindow.PiPState, reason: string): void {
+    logInfo(`[PiP] stateChange: ${state}, reason: ${reason}`);
+    if (state === PiPWindow.PiPState.ABOUT_TO_START || state === PiPWindow.PiPState.STARTED) {
+      this.pipActive_ = true;
+    } else if (state === PiPWindow.PiPState.ABOUT_TO_RESTORE) {
+      this.pipActive_ = false;
+    } else if (state === PiPWindow.PiPState.STOPPED) {
+      this.pipActive_ = false;
+      // ⭐ 小窗被用户关闭（拖删/关闭按钮）且应用仍在后台：未开后台播放则暂停，避免"幽灵音频"
+      if ((reason === 'dragDelete' || reason === 'panelActionDelete') && this.appInBackground && !this.bgp) {
+        this.av?.pause();
+        this.avAudio?.pause();
+        this.play = false;
+        LiveViewHelper.updatePlayState(false);
+        logInfo('[PiP] 小窗被关闭，已暂停播放');
+      }
+    } else if (state === PiPWindow.PiPState.ERROR) {
+      this.pipActive_ = false;
+    }
+    this.updatePipAutoArm_();
   }
 
   async togglePP() {
@@ -5129,6 +5331,9 @@ struct VideoPlayerPage {
     }
     // ⭐ 实况窗：更新播放状态
     LiveViewHelper.updatePlayState(this.play);
+    // ⭐ 自动画中画：同步小窗面板播放/暂停按钮状态 + 武装状态
+    this.syncPipControlStatus_();
+    this.updatePipAutoArm_();
     this.cancelDelayHide();
     if (this.cv) this.resetCT();
   }
@@ -5489,6 +5694,15 @@ struct VideoPlayerPage {
       }, this.FS_ANIM_DURATION);
       return;
     }
+    // ⭐ 回弹（P 在 0.3~0.62 之间）：没有发生旋转，几何必须立即回到真实槽矩形 ⇒ 复位 fsEntering。
+    //   ⚠️ 这是「右滑没到全屏阈值 → 再左滑切换布局 → 视频区域不跟着换位置」的真凶：
+    //      上面 captureFSSnapshot() 之后已把 fsEntering 置 true（语义是"旋转期间把常驻层钉在快照矩形上"），
+    //      而 ovRectX/Y/W/H 与 ovVideoW/H 在 fsEntering 为 true 时**恒返回快照值**。
+    //      旧实现只在 reached 分支（5513）和瞬切分支（5502）复位，回弹分支漏了 ⇒ 常驻层永久钉在
+    //      手势开始前的矩形上：占位槽已经移到右侧（日志 `[FSDBG] slot rect=(266.5,...)`），
+    //      视频画面却留在左边不动（容器仍是 `[FSDBG] snapshot ... rect=(7.8,7.8,...)`）。
+    //      而且只有之后成功进一次全屏才会被复位，属于"卡到下次全屏"的隐性故障。
+    this.fsEntering = false;
     animateTo({
       duration: 700,
       curve: curves.springCurve(0.08, 1.3, this.FS_SPRING_STIFFNESS, 10)
@@ -5768,8 +5982,131 @@ struct VideoPlayerPage {
     }
   }
 
+  /**
+   * ⭐ 4K 快速起播：判断本次起播是否要先降档。
+   *
+   * 为什么需要（实测 BV1qaJ86aEBd，4K）：
+   *   4K（15Mbps）每 5 秒段 8~10MB，AVPlayer seek 后要预读 4 段 ≈ 40MB；
+   *   在 8MB/s 的链路上物理下限就是 4~5 秒（tap→首帧 8.2s）。
+   *   换成 1080P+ 后每段 ~3MB，同样 4 段只要 12MB —— 首帧能早 4 秒以上。
+   * 出帧后由 scheduleUpgradeToWantedQn() 在后台升回 4K（那时用户已经在看内容了）。
+   *
+   * ⚠️ 不再要求“必须有续播点”：入口为首页/推荐时 initialProgress_ 恒为 0，
+   *    真正的续播点要等 playurl 返回才知道，用旧条件会把这条路径整段漏掉。
+   */
+  private pickFastStartQn(): number {
+    const want: number = this.qn;
+    // ⭐ 开关关闭时直接按设置的最高画质请求（用户决定：宁可首帧慢，也不要播放中切档中断）
+    if (!FAST_START_4K || want < 120) {
+      return want;
+    }
+    // 用户可在设置里关掉（AppStorage 开关，默认开启）
+    if (AppStorage.get<boolean>('fastStart4KDisabled') === true) {
+      return want;
+    }
+    // ⚠️ 不能只在「路由已带进度」时降级：从首页/推荐/相关视频进来时
+    //    initialProgress_ 恒为 0，真正的续播点是 playurl 返回后才拿到的
+    //    （实测 BV1qaJ86aEBd 从首页进入：initialProgress=0，服务端续播点 60s，
+    //     于是旧条件判成“不用降级”，又走了 7.16 秒的 4K 全量路径）。
+    //    即使从 0:00 起播，4K 首段 6.5MB vs 1080P 2MB 也仍然值得降。
+    const fallback: number = 112;   // 1080P+；服务端不支持时 getVideoPlayUrl 内部会再降
+    this.fastStartQn_ = fallback;
+    this.upgradeQn_ = want;
+    logInfo(`[VideoPlayer] 4K 快速起播: 先用 qn=${fallback} 出帧（续播点未知也降级），随后自动升级到 qn=${want}`);
+    return fallback;
+  }
+
+  /**
+   * ⭐ 首帧已出后，把画质升回目标档（4K）——**先把目标档的分段预取进共享缓存，再切播放器**。
+   *
+   * 为什么这样做：切档必须重建 AVPlayer（新 MPD / 新 init 段），中断无法避免；
+   * 但中断里最贵的是「重新下载 8~10MB/段的 4K 数据」（实测 4.6s）。
+   * 现在提前用一个临时 DashPlayerBridge 把当前播放位置附近的 4K 分段拉进
+   * DashMediaServer 的**进程级共享缓存**（cache/inflight 已改 static），
+   * 正式切换时 prepare/seek 直接命中 ⇒ 中断只剩解码器重建那一下。
+   */
+  private scheduleUpgradeToWantedQn(): void {
+    const target: number = this.upgradeQn_;
+    if (!target || this.upgradeTimer_ >= 0) {
+      return;
+    }
+    const delayMs: number = 2000;
+    logInfo(`[VideoPlayer] 首帧已出，${delayMs}ms 后开始预热 ${target}（预取完再切档）`);
+    this.upgradeTimer_ = setTimeout(() => {
+      this.upgradeTimer_ = -1;
+      if (!this.av || this.qs || this.ld) {
+        logInfo('[VideoPlayer] 升级画质跳过: 播放器未就绪/正在切档');
+        return;
+      }
+      if (this.qn === target) {
+        logInfo('[VideoPlayer] 升级画质跳过: 已是目标画质');
+        return;
+      }
+      this.prefetchUpgradeTarget(target).then(() => {
+        if (!this.av || this.qs || this.ld) {
+          logInfo('[VideoPlayer] 升级画质取消: 预热期间播放器已变化');
+          return;
+        }
+        if (this.qn === target) {
+          return;
+        }
+        logInfo(`[VideoPlayer] 快速起播完成，升级画质 ${this.qn} -> ${target}`);
+        this.upgradeQn_ = 0;
+        // ⭐ 标记为“自动升档”：switchQ 里据此跳过 defaultVideoQn 持久化
+        this.autoUpgradeInProgress_ = true;
+        this.switchQ(target).catch((e: Error) => logError(`[VideoPlayer] 升级画质失败: ${e}`))
+          .finally(() => { this.autoUpgradeInProgress_ = false; });
+      });
+    }, delayMs);
+  }
+
+  /**
+   * ⭐ 预热目标画质：用临时 bridge 拉起转播站，把「当前播放位置」附近的 4K 分段
+   * 下载进 DashMediaServer 的静态缓存，然后停掉临时转播站（缓存保留）。
+   * 失败不影响播放（切档时会走原来的冷下载路径）。
+   */
+  private async prefetchUpgradeTarget(target: number): Promise<void> {
+    if (!this.vi.cid || this.vi.cid <= 0) {
+      return;
+    }
+    const posMs: number = Math.max(0, Math.round(this.ct * 1000));
+    let warm: DashPlayerBridge | null = null;
+    try {
+      const r: PlayUrlResult = this.isPgc_
+        ? await getPgcPlayUrl(this.epId_, this.vi.cid, target, this.seasonId_)
+        : await getVideoPlayUrl(this.vi.bvid, this.vi.cid, target);
+      if (!r.dash) {
+        return;
+      }
+      warm = new DashPlayerBridge();
+      await warm.buildAndStart(
+        r.dash, 'https://www.bilibili.com/',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        AppStorage.get<string>('biliCookie') || '', posMs);
+      logInfo(`[VideoPlayer] ${target} 预热: 转播站已就绪(pos=${this.ct}s)，等待分段落地`);
+      // 目标段 8~10MB，给 2.5s 让预取把「当前段 + 起始段」拉完（超出也在播放器侧回源）
+      await new Promise<void>((resolve: () => void) => {
+        setTimeout(() => resolve(), 2500);
+      });
+      logInfo(`[VideoPlayer] ${target} 预热完成，准备切档`);
+    } catch (e) {
+      logWarn(`[VideoPlayer] ${target} 预热失败: ${e}`);
+    } finally {
+      if (warm) {
+        // 只停临时转播站；静态缓存里的分段保留给正式切档复用
+        await warm.stopIfRunning();
+      }
+    }
+  }
+
   async switchQ(n: number) {
     if (this.qs || n === this.qn) return;
+    // ⭐ 用户手动切了画质 → 放弃快速起播的自动升级（手动优先）
+    this.upgradeQn_ = 0;
+    if (this.upgradeTimer_ >= 0) {
+      clearTimeout(this.upgradeTimer_);
+      this.upgradeTimer_ = -1;
+    }
     this.qs = true;
     const st = this.ct;
     const wp = this.play;
@@ -5833,7 +6170,13 @@ struct VideoPlayerPage {
       this.qn = result.actualQn || n;
       this.applyAcceptQuality(result);
       this.ql = this.getQlLabel(this.qn);
-      AppStorage.set<number>('defaultVideoQn', this.qn);
+      // ⭐ 只持久化【用户主动、且服务端如其所愿】的切换：
+      //    1) 自动升级（4K 快速起播）不能改用户设置 —— 否则「默认 4K 的用户看了几个
+      //       不支持 4K 的视频后，defaultVideoQn 被永久改成 1080P」（实测 16:48 发生）；
+      //    2) 服务端降级（请求 120 实际给 112）同样不覆盖用户意愿。
+      if (!this.autoUpgradeInProgress_ && this.qn === n) {
+        AppStorage.set<number>('defaultVideoQn', this.qn);
+      }
       await new Promise<void>(r => {
         const iv = setInterval(() => {
           if (this.av && (this.av.state === 'prepared' || this.av.state === 'playing')) {
@@ -7380,9 +7723,9 @@ struct VideoPlayerPage {
                             .fontColor(this.layoutSwapPressed ? this.playerFollowTheme ? this.customThemeColor : ('app.color.color_bilibili_pink') : $r('app.color.color_player_text_secondary'))
                             .margin({ top: 3 })
                         }
-                        .width(51)
-                        .height(51)
-                        .borderRadius(25.5)
+                        .width(this.NAV_BTN_SIZE)
+                        .height(this.NAV_BTN_SIZE)
+                        .borderRadius(this.NAV_BTN_SIZE / 2)
                         .backgroundColor(this.getComponentBg(this.cardStyleVideoNavBtns))
                         .justifyContent(FlexAlign.Center)
                         .alignItems(HorizontalAlign.Center)
@@ -7404,9 +7747,9 @@ struct VideoPlayerPage {
                             .fontColor(this.rotationPressed ? this.playerFollowTheme ? this.customThemeColor : ('app.color.color_bilibili_pink') : $r('app.color.color_player_text_secondary'))
                             .margin({ top: 3 })
                         }
-                        .width(51)
-                        .height(51)
-                        .borderRadius(25.5)
+                        .width(this.NAV_BTN_SIZE)
+                        .height(this.NAV_BTN_SIZE)
+                        .borderRadius(this.NAV_BTN_SIZE / 2)
                         .backgroundColor(this.getComponentBg(this.cardStyleVideoNavBtns))
                         .justifyContent(FlexAlign.Center)
                         .alignItems(HorizontalAlign.Center)
@@ -7492,9 +7835,9 @@ struct VideoPlayerPage {
                             .fontColor(this.darkModePressed ? this.playerFollowTheme ? this.customThemeColor : ('app.color.color_bilibili_pink') : $r('app.color.color_player_text_secondary'))
                             .margin({ top: 3 })
                         }
-                        .width(51)
-                        .height(51)
-                        .borderRadius(25.5)
+                        .width(this.NAV_BTN_SIZE)
+                        .height(this.NAV_BTN_SIZE)
+                        .borderRadius(this.NAV_BTN_SIZE / 2)
                         .backgroundColor(this.getComponentBg(this.cardStyleVideoNavBtns))
                         .justifyContent(FlexAlign.Center)
                         .alignItems(HorizontalAlign.Center)
@@ -7516,9 +7859,9 @@ struct VideoPlayerPage {
                             .fontColor(this.minimizePressed ? this.playerFollowTheme ? this.customThemeColor : ('app.color.color_bilibili_pink') : $r('app.color.color_player_text_secondary'))
                             .margin({ top: 3 })
                         }
-                        .width(51)
-                        .height(51)
-                        .borderRadius(25.5)
+                        .width(this.NAV_BTN_SIZE)
+                        .height(this.NAV_BTN_SIZE)
+                        .borderRadius(this.NAV_BTN_SIZE / 2)
                         .backgroundColor(this.getComponentBg(this.cardStyleVideoNavBtns))
                         .justifyContent(FlexAlign.Center)
                         .alignItems(HorizontalAlign.Center)
@@ -7540,9 +7883,9 @@ struct VideoPlayerPage {
                             .fontColor(this.episodePressed ? this.playerFollowTheme ? this.customThemeColor : ('app.color.color_bilibili_pink') : $r('app.color.color_player_text_secondary'))
                             .margin({ top: 3 })
                         }
-                        .width(51)
-                        .height(51)
-                        .borderRadius(25.5)
+                        .width(this.NAV_BTN_SIZE)
+                        .height(this.NAV_BTN_SIZE)
+                        .borderRadius(this.NAV_BTN_SIZE / 2)
                         .backgroundColor(this.getComponentBg(this.cardStyleVideoNavBtns))
                         .justifyContent(FlexAlign.Center)
                         .alignItems(HorizontalAlign.Center)
@@ -7572,9 +7915,9 @@ struct VideoPlayerPage {
                              .fontColor(this.seasonPressed ? this.playerFollowTheme ? this.customThemeColor : ('app.color.color_bilibili_pink') : $r('app.color.color_player_text_secondary'))
                              .margin({ top: 3 })
                          }
-                         .width(51)
-                         .height(51)
-                         .borderRadius(25.5)
+                         .width(this.NAV_BTN_SIZE)
+                         .height(this.NAV_BTN_SIZE)
+                         .borderRadius(this.NAV_BTN_SIZE / 2)
                          .backgroundColor(this.getComponentBg(this.cardStyleVideoNavBtns))
                          .justifyContent(FlexAlign.Center)
                          .alignItems(HorizontalAlign.Center)
@@ -7617,7 +7960,7 @@ struct VideoPlayerPage {
                               .fontColor(this.layoutSwapPressed ? this.playerFollowTheme ? this.customThemeColor : ('app.color.color_bilibili_pink') : $r('app.color.color_player_text_secondary'))
                               .margin({ top: 3 })
                           }
-                          .width(51).height(51).borderRadius(25.5)
+                          .width(this.NAV_BTN_SIZE).height(this.NAV_BTN_SIZE).borderRadius(this.NAV_BTN_SIZE / 2)
                           .backgroundColor(this.getComponentBg(this.cardStyleVideoNavBtns))
                           .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
                           .margin({ left: 4, right: 4 })
@@ -7637,7 +7980,7 @@ struct VideoPlayerPage {
                               .fontColor(this.rotationPressed ? this.playerFollowTheme ? this.customThemeColor : ('app.color.color_bilibili_pink') : $r('app.color.color_player_text_secondary'))
                               .margin({ top: 3 })
                           }
-                          .width(51).height(51).borderRadius(25.5)
+                          .width(this.NAV_BTN_SIZE).height(this.NAV_BTN_SIZE).borderRadius(this.NAV_BTN_SIZE / 2)
                           .backgroundColor(this.getComponentBg(this.cardStyleVideoNavBtns))
                           .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
                           .margin({ left: 4, right: 4 })
@@ -7718,7 +8061,7 @@ struct VideoPlayerPage {
                               .fontColor(this.darkModePressed ? this.playerFollowTheme ? this.customThemeColor : ('app.color.color_bilibili_pink') : $r('app.color.color_player_text_secondary'))
                               .margin({ top: 3 })
                           }
-                          .width(51).height(51).borderRadius(25.5)
+                          .width(this.NAV_BTN_SIZE).height(this.NAV_BTN_SIZE).borderRadius(this.NAV_BTN_SIZE / 2)
                           .backgroundColor(this.getComponentBg(this.cardStyleVideoNavBtns))
                           .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
                           .margin({ left: 4, right: 4 })
@@ -7738,7 +8081,7 @@ struct VideoPlayerPage {
                             .fontColor(this.minimizePressed ? this.playerFollowTheme ? this.customThemeColor : ('app.color.color_bilibili_pink') : $r('app.color.color_player_text_secondary'))
                             .margin({ top: 3 })
                         }
-                        .width(51).height(51).borderRadius(25.5)
+                        .width(this.NAV_BTN_SIZE).height(this.NAV_BTN_SIZE).borderRadius(this.NAV_BTN_SIZE / 2)
                         .backgroundColor(this.getComponentBg(this.cardStyleVideoNavBtns))
                         .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
                         .margin({ left: 4, right: 4 })
@@ -7757,7 +8100,7 @@ struct VideoPlayerPage {
                               .fontColor(this.episodePressed ? this.playerFollowTheme ? this.customThemeColor : ('app.color.color_bilibili_pink') : $r('app.color.color_player_text_secondary'))
                               .margin({ top: 3 })
                           }
-                          .width(51).height(51).borderRadius(25.5)
+                          .width(this.NAV_BTN_SIZE).height(this.NAV_BTN_SIZE).borderRadius(this.NAV_BTN_SIZE / 2)
                           .backgroundColor(this.getComponentBg(this.cardStyleVideoNavBtns))
                           .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
                           .margin({ left: 4, right: 4 })
@@ -7786,7 +8129,7 @@ struct VideoPlayerPage {
                               .fontColor(this.seasonPressed ? this.playerFollowTheme ? this.customThemeColor : ('app.color.color_bilibili_pink') : $r('app.color.color_player_text_secondary'))
                               .margin({ top: 3 })
                           }
-                          .width(51).height(51).borderRadius(25.5)
+                          .width(this.NAV_BTN_SIZE).height(this.NAV_BTN_SIZE).borderRadius(this.NAV_BTN_SIZE / 2)
                           .backgroundColor(this.getComponentBg(this.cardStyleVideoNavBtns))
                           .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
                           .margin({ left: 4, right: 4 })
@@ -8274,7 +8617,7 @@ struct VideoPlayerPage {
                       .fontColor(this.seasonPressed ? this.playerFollowTheme ? this.customThemeColor : ('app.color.color_bilibili_pink') : $r('app.color.color_player_text_secondary'))
                       .margin({ top: 3 })
                   }
-                  .width(51).height(51).borderRadius(25.5)
+                  .width(this.NAV_BTN_SIZE).height(this.NAV_BTN_SIZE).borderRadius(this.NAV_BTN_SIZE / 2)
                   .backgroundColor(this.getComponentBg(this.cardStyleVideoNavBtns))
                   .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
                   .margin({ left: 4, right: 4 })
@@ -8294,7 +8637,7 @@ struct VideoPlayerPage {
                       .fontColor(this.episodePressed ? this.playerFollowTheme ? this.customThemeColor : ('app.color.color_bilibili_pink') : $r('app.color.color_player_text_secondary'))
                       .margin({ top: 3 })
                   }
-                  .width(51).height(51).borderRadius(25.5)
+                  .width(this.NAV_BTN_SIZE).height(this.NAV_BTN_SIZE).borderRadius(this.NAV_BTN_SIZE / 2)
                   .backgroundColor(this.getComponentBg(this.cardStyleVideoNavBtns))
                   .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
                   .margin({ left: 4, right: 4 })
@@ -8313,7 +8656,7 @@ struct VideoPlayerPage {
                     .fontColor(this.minimizePressed ? this.playerFollowTheme ? this.customThemeColor : ('app.color.color_bilibili_pink') : $r('app.color.color_player_text_secondary'))
                     .margin({ top: 3 })
                 }
-                .width(51).height(51).borderRadius(25.5)
+                .width(this.NAV_BTN_SIZE).height(this.NAV_BTN_SIZE).borderRadius(this.NAV_BTN_SIZE / 2)
                 .backgroundColor(this.getComponentBg(this.cardStyleVideoNavBtns))
                 .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
                 .margin({ left: 4, right: 4 })
@@ -8330,7 +8673,7 @@ struct VideoPlayerPage {
                     .fontColor(this.darkModePressed ? this.playerFollowTheme ? this.customThemeColor : ('app.color.color_bilibili_pink') : $r('app.color.color_player_text_secondary'))
                     .margin({ top: 3 })
                 }
-                .width(51).height(51).borderRadius(25.5)
+                .width(this.NAV_BTN_SIZE).height(this.NAV_BTN_SIZE).borderRadius(this.NAV_BTN_SIZE / 2)
                 .backgroundColor(this.getComponentBg(this.cardStyleVideoNavBtns))
                 .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
                 .margin({ left: 4, right: 4 })
@@ -8347,7 +8690,7 @@ struct VideoPlayerPage {
                     .fontColor(this.detailCommentBtnPressed ? this.playerFollowTheme ? this.customThemeColor : ('app.color.color_bilibili_pink') : $r('app.color.color_player_text_secondary'))
                     .margin({ top: 3 })
                 }
-                .width(90).height(51).borderRadius(25.5)
+                .width(this.NAV_BTN_CAPSULE_W).height(this.NAV_BTN_SIZE).borderRadius(this.NAV_BTN_SIZE / 2)
                 .backgroundColor(this.getComponentBg(this.cardStyleVideoNavBtns))
                 .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
                 .margin({ left: 4, right: 4 })
@@ -8372,7 +8715,7 @@ struct VideoPlayerPage {
                     .fontColor(this.rotationPressed ? this.playerFollowTheme ? this.customThemeColor : ('app.color.color_bilibili_pink') : $r('app.color.color_player_text_secondary'))
                     .margin({ top: 3 })
                 }
-                .width(51).height(51).borderRadius(25.5)
+                .width(this.NAV_BTN_SIZE).height(this.NAV_BTN_SIZE).borderRadius(this.NAV_BTN_SIZE / 2)
                 .backgroundColor(this.getComponentBg(this.cardStyleVideoNavBtns))
                 .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
                 .margin({ left: 4, right: 4 })
@@ -8390,14 +8733,14 @@ struct VideoPlayerPage {
                       .fontColor(this.layoutSwapPressed ? this.playerFollowTheme ? this.customThemeColor : ('app.color.color_bilibili_pink') : $r('app.color.color_player_text_secondary'))
                       .margin({ top: 3 })
                   }
-                  .width(51).height(51).borderRadius(25.5)
+                  .width(this.NAV_BTN_SIZE).height(this.NAV_BTN_SIZE).borderRadius(this.NAV_BTN_SIZE / 2)
                   .backgroundColor(this.getComponentBg(this.cardStyleVideoNavBtns))
                   .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
                   .margin({ left: 4, right: 4 })
                   .onClick(() => this.toggleLayoutSwap())
                 }
               }
-              .margin({ top: 6, bottom: 6 })
+              .margin({ top: this.NAV_BTN_ROW_MARGIN, bottom: this.NAV_BTN_ROW_MARGIN })
               .transition(TransitionEffect.asymmetric(
                 TransitionEffect.translate({ x: 30 }).combine(TransitionEffect.opacity(0))
                   .animation({ duration: 250, curve: Curve.EaseOut }),
@@ -8419,7 +8762,7 @@ struct VideoPlayerPage {
                       .fontColor(this.layoutSwapPressed ? this.playerFollowTheme ? this.customThemeColor : ('app.color.color_bilibili_pink') : $r('app.color.color_player_text_secondary'))
                       .margin({ top: 3 })
                   }
-                  .width(51).height(51).borderRadius(25.5)
+                  .width(this.NAV_BTN_SIZE).height(this.NAV_BTN_SIZE).borderRadius(this.NAV_BTN_SIZE / 2)
                   .backgroundColor(this.getComponentBg(this.cardStyleVideoNavBtns))
                   .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
                   .margin({ left: 4, right: 4 })
@@ -8437,7 +8780,7 @@ struct VideoPlayerPage {
                     .fontColor(this.rotationPressed ? this.playerFollowTheme ? this.customThemeColor : ('app.color.color_bilibili_pink') : $r('app.color.color_player_text_secondary'))
                     .margin({ top: 3 })
                 }
-                .width(51).height(51).borderRadius(25.5)
+                .width(this.NAV_BTN_SIZE).height(this.NAV_BTN_SIZE).borderRadius(this.NAV_BTN_SIZE / 2)
                 .backgroundColor(this.getComponentBg(this.cardStyleVideoNavBtns))
                 .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
                 .margin({ left: 4, right: 4 })
@@ -8454,7 +8797,7 @@ struct VideoPlayerPage {
                     .fontColor(this.detailCommentBtnPressed ? this.playerFollowTheme ? this.customThemeColor : ('app.color.color_bilibili_pink') : $r('app.color.color_player_text_secondary'))
                     .margin({ top: 3 })
                 }
-                .width(90).height(51).borderRadius(25.5)
+                .width(this.NAV_BTN_CAPSULE_W).height(this.NAV_BTN_SIZE).borderRadius(this.NAV_BTN_SIZE / 2)
                 .backgroundColor(this.getComponentBg(this.cardStyleVideoNavBtns))
                 .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
                 .margin({ left: 4, right: 4 })
@@ -8479,7 +8822,7 @@ struct VideoPlayerPage {
                     .fontColor(this.darkModePressed ? this.playerFollowTheme ? this.customThemeColor : ('app.color.color_bilibili_pink') : $r('app.color.color_player_text_secondary'))
                     .margin({ top: 3 })
                 }
-                .width(51).height(51).borderRadius(25.5)
+                .width(this.NAV_BTN_SIZE).height(this.NAV_BTN_SIZE).borderRadius(this.NAV_BTN_SIZE / 2)
                 .backgroundColor(this.getComponentBg(this.cardStyleVideoNavBtns))
                 .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
                 .margin({ left: 4, right: 4 })
@@ -8496,7 +8839,7 @@ struct VideoPlayerPage {
                     .fontColor(this.minimizePressed ? this.playerFollowTheme ? this.customThemeColor : ('app.color.color_bilibili_pink') : $r('app.color.color_player_text_secondary'))
                     .margin({ top: 3 })
                 }
-                .width(51).height(51).borderRadius(25.5)
+                .width(this.NAV_BTN_SIZE).height(this.NAV_BTN_SIZE).borderRadius(this.NAV_BTN_SIZE / 2)
                 .backgroundColor(this.getComponentBg(this.cardStyleVideoNavBtns))
                 .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
                 .margin({ left: 4, right: 4 })
@@ -8514,7 +8857,7 @@ struct VideoPlayerPage {
                       .fontColor(this.episodePressed ? this.playerFollowTheme ? this.customThemeColor : ('app.color.color_bilibili_pink') : $r('app.color.color_player_text_secondary'))
                       .margin({ top: 3 })
                   }
-                  .width(51).height(51).borderRadius(25.5)
+                  .width(this.NAV_BTN_SIZE).height(this.NAV_BTN_SIZE).borderRadius(this.NAV_BTN_SIZE / 2)
                   .backgroundColor(this.getComponentBg(this.cardStyleVideoNavBtns))
                   .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
                   .margin({ left: 4, right: 4 })
@@ -8532,14 +8875,14 @@ struct VideoPlayerPage {
                        .fontColor(this.seasonPressed ? this.playerFollowTheme ? this.customThemeColor : ('app.color.color_bilibili_pink') : $r('app.color.color_player_text_secondary'))
                        .margin({ top: 3 })
                    }
-                   .width(51).height(51).borderRadius(25.5)
+                   .width(this.NAV_BTN_SIZE).height(this.NAV_BTN_SIZE).borderRadius(this.NAV_BTN_SIZE / 2)
                    .backgroundColor(this.getComponentBg(this.cardStyleVideoNavBtns))
                    .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
                    .margin({ left: 4, right: 4 })
                    .onClick(() => { this.seasonScale = 0.85; this.seasonPressed = true; setTimeout(() => { this.seasonScale = 1; this.seasonPressed = false; }, 150); this.showSeasonSheet = true; })
                  }
                }
-              .margin({ top: 6, bottom: 6 })
+              .margin({ top: this.NAV_BTN_ROW_MARGIN, bottom: this.NAV_BTN_ROW_MARGIN })
               .transition(TransitionEffect.asymmetric(
                 TransitionEffect.translate({ x: -30 }).combine(TransitionEffect.opacity(0))
                   .animation({ duration: 250, curve: Curve.EaseOut }),
