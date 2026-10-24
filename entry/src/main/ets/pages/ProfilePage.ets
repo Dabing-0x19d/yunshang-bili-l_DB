@@ -1352,7 +1352,7 @@ export struct ProfilePage {
   }
 
   build() {
-    Stack() {
+    HdsNavigation() {
       Scroll() {
         Column() {
           // ── 1. 最顶部：头像卡片（Hivid UserInfoCard 通栏形式）──
@@ -2115,10 +2115,6 @@ export struct ProfilePage {
           this.SectionHeader('关于')
           Column() {
             this.HividRowItem('关于软件', () => { this.goToAbout(); })
-            if (this.isLoggedIn) {
-              Divider()
-              this.HividRowItem('退出登录', () => { this.showLogoutConfirm(); })
-            }
           }
           .width('94%')
           .borderRadius(15)
@@ -2131,11 +2127,12 @@ export struct ProfilePage {
           // })
         }
         .width('100%')
-        .padding({ bottom: 96 })
+        .padding({ top: this.hideStatusBar ? 56 : (this.statusBarHeight + 56), bottom: 96 })
         .clip(false)
       }
-      .scrollBar(BarState.Off).edgeEffect(EdgeEffect.Spring).backgroundColor('transparent')
-      .padding({ top: this.hideStatusBar ? 16 : (this.statusBarHeight + 16) })
+      .scrollBar(BarState.Off)
+      .edgeEffect(EdgeEffect.Spring)
+      .backgroundColor('transparent')
       .bindSheet($$this.isCardStyleSheetShow, this.CardStyleSheetContent, {
         height: '80%',
         backgroundColor: undefined,
@@ -2144,6 +2141,60 @@ export struct ProfilePage {
         onDisappear: () => { this.isCardStyleSheetShow = false; }
       })
     }
+    .titleBar({
+      avoidLayoutSafeArea: true,
+      padding: { start: LengthMetrics.vp(16), end: LengthMetrics.vp(16) },
+      style: {
+        scrollEffectOpts: {
+          enableScrollEffect: true,
+          scrollEffectType: ScrollEffectType.GRADIENT_BLUR,
+          blurEffectiveStartOffset: LengthMetrics.vp(0),
+          blurEffectiveEndOffset: LengthMetrics.vp(20)
+        },
+        systemMaterialEffect: {
+          materialType: hdsMaterial.MaterialType.ADAPTIVE,
+          materialLevel: hdsMaterial.MaterialLevel.EXQUISITE
+        },
+        originalStyle: {
+          backgroundStyle: { backgroundColor: 'transparent' },
+          contentStyle: {
+            titleStyle: { mainTitleColor: $r('sys.color.font_primary'), subTitleColor: $r('sys.color.font_secondary') },
+            menuStyle: { backgroundColor: $r('sys.color.comp_background_tertiary'), iconColor: $r('sys.color.icon_primary') },
+            backIconStyle: { backgroundColor: $r('sys.color.comp_background_tertiary'), iconColor: $r('sys.color.icon_primary') }
+          }
+        },
+        scrollEffectStyle: {
+          backgroundStyle: { backgroundColor: 'transparent' },
+          contentStyle: {
+            titleStyle: { mainTitleColor: $r('sys.color.font_primary'), subTitleColor: $r('sys.color.font_secondary') },
+            menuStyle: { backgroundColor: $r('sys.color.comp_background_tertiary'), iconColor: $r('sys.color.icon_primary') },
+            backIconStyle: { backgroundColor: $r('sys.color.comp_background_tertiary'), iconColor: $r('sys.color.icon_primary') }
+          }
+        }
+      },
+      content: {
+        title: {
+          mainTitle: '我的'
+        },
+        menu: {
+          value: this.isLoggedIn ? [
+            {
+              content: {
+                icon: $r('sys.symbol.power'),
+                label: '退出登录',
+                isEnabled: true,
+                action: (): void => {
+                  this.showLogoutConfirm();
+                }
+              }
+            }
+          ] : []
+        }
+      }
+    })
+    .titleMode(HdsNavigationTitleMode.MINI)
+    .hideBackButton(true)
+    .mode(NavigationMode.Stack)
     .width('100%')
     .height('100%')
     .backgroundColor('transparent')
