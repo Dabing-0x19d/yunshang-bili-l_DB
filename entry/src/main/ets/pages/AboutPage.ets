@@ -223,6 +223,22 @@ struct AboutPage {
             .height(56)
             .padding({ left: 16, right: 16 })
             .alignItems(VerticalAlign.Center)
+
+            Divider()
+
+            Row() {
+              Text('开源声明')
+                .fontSize(16)
+                .fontColor($r('sys.color.font_primary'))
+              Blank()
+              Text('基于原开源 Fork 项目二次改造')
+                .fontSize(12)
+                .fontColor($r('sys.color.font_secondary'))
+            }
+            .width('100%')
+            .height(56)
+            .padding({ left: 16, right: 16 })
+            .alignItems(VerticalAlign.Center)
           }
           .width('94%')
           .margin({ top: 16, bottom: 40 })
