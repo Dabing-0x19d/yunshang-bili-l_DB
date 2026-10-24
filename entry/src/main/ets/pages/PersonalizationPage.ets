@@ -182,7 +182,7 @@ export struct PersonalizationPage {
   @State pvRefW: number = 0;
   /** ⭐ 小窗尺寸落盘防抖句柄 */
   private sizeSaveTimer_: number = -1;
-  @State isFloatBtnSpeedSheetShow: boolean = false;
+  @State isFloatBtnSpeedMenuShow: boolean = false;
   @State isOrientationMenuShow: boolean = false;
   private canvasCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D();
   private dataPreferences: preferences.Preferences | null = null;
@@ -849,7 +849,7 @@ export struct PersonalizationPage {
   }
 
   private showFloatBtnSpeedPicker(): void {
-    this.isFloatBtnSpeedSheetShow = true;
+    this.isFloatBtnSpeedMenuShow = true;
   }
 
   private async saveFloatBtnRotationSpeed(value: number): Promise<void> {
@@ -1258,93 +1258,21 @@ export struct PersonalizationPage {
   }
 
   @Builder
-  FloatBtnSpeedSheetContent() {
-    HdsNavigation() {
-      Scroll() {
-        Column({ space: 6 }) {
-          ForEach(FLOAT_BTN_SPEEDS, (option: FloatBtnSpeedOption) => {
-            Row() {
-              Text(option.label)
-                .fontSize(15)
-                .fontColor(this.floatBtnRotationSpeed === option.value
-                  ? $r('sys.color.font_primary')
-                  : $r('sys.color.font_secondary'))
-              Blank()
-              if (this.floatBtnRotationSpeed === option.value) {
-                SymbolGlyph($r('sys.symbol.checkmark'))
-                  .fontSize(16)
-                  .fontColor([$r('sys.color.icon_emphasize')])
-              }
-            }
-            .width('100%')
-            .height(52)
-            .padding({ left: 16, right: 16 })
-            .borderRadius(12)
-            .backgroundColor(this.floatBtnRotationSpeed === option.value
-              ? (this.isDarkMode ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.05)')
-              : Color.Transparent)
-            .onClick(() => { this.saveFloatBtnRotationSpeed(option.value); })
+  FloatBtnSpeedMenuBuilder() {
+    Menu() {
+      ForEach(FLOAT_BTN_SPEEDS, (option: FloatBtnSpeedOption) => {
+        MenuItem({
+          content: option.label,
+          labelInfo: this.floatBtnRotationSpeed === option.value ? '当前' : ''
+        })
+          .selectIcon(this.floatBtnRotationSpeed === option.value)
+          .selected(this.floatBtnRotationSpeed === option.value)
+          .onClick(() => {
+            this.isFloatBtnSpeedMenuShow = false;
+            this.saveFloatBtnRotationSpeed(option.value);
           })
-        }
-        .width('100%')
-        .padding({ top: 56 + 12, left: 16, right: 16, bottom: 24 })
-      }
-      .width('100%')
-      .height('100%')
-      .scrollBar(BarState.Off)
-      .edgeEffect(EdgeEffect.Spring)
+      }, (option: FloatBtnSpeedOption) => `${option.value}_${option.label}`)
     }
-    .titleMode(HdsNavigationTitleMode.MODAL)
-    .titleBar({
-      padding: { start: LengthMetrics.vp(16), end: LengthMetrics.vp(16) },
-      style: {
-        scrollEffectOpts: {
-          enableScrollEffect: true,
-          scrollEffectType: ScrollEffectType.IMMERSIVE_GRADIENT_BLUR,
-          blurEffectiveStartOffset: LengthMetrics.vp(0),
-          blurEffectiveEndOffset: LengthMetrics.vp(20)
-        },
-        systemMaterialEffect: {
-          materialType: hdsMaterial.MaterialType.ADAPTIVE,
-          materialLevel: hdsMaterial.MaterialLevel.EXQUISITE
-        },
-        originalStyle: {
-          backgroundStyle: { backgroundColor: 'transparent' },
-          contentStyle: {
-            titleStyle: { mainTitleColor: $r('sys.color.font_primary'), subTitleColor: $r('sys.color.font_secondary') },
-            menuStyle: { backgroundColor: $r('sys.color.comp_background_tertiary'), iconColor: $r('sys.color.icon_primary') },
-            backIconStyle: { backgroundColor: $r('sys.color.comp_background_tertiary'), iconColor: $r('sys.color.icon_primary') }
-          }
-        },
-        scrollEffectStyle: {
-          backgroundStyle: { backgroundColor: 'transparent' },
-          contentStyle: {
-            titleStyle: { mainTitleColor: $r('sys.color.font_primary'), subTitleColor: $r('sys.color.font_secondary') },
-            menuStyle: { backgroundColor: $r('sys.color.comp_background_tertiary'), iconColor: $r('sys.color.icon_primary') },
-            backIconStyle: { backgroundColor: $r('sys.color.comp_background_tertiary'), iconColor: $r('sys.color.icon_primary') }
-          }
-        }
-      },
-      content: {
-        title: {
-          mainTitle: '浮窗旋转速度'
-        },
-        menu: {
-          value: [
-            {
-              content: {
-                label: 'modal_cancel',
-                isEnabled: true,
-                type: IconStyleMode.SMALL,
-                action: (): void => {
-                  this.isFloatBtnSpeedSheetShow = false;
-                }
-              }
-            }
-          ]
-        }
-      }
-    })
   }
 
   // ── 壁纸相关方法 ──
@@ -2102,9 +2030,31 @@ export struct PersonalizationPage {
                 this.saveLightsOffHideOnly(isOn);
               })
               Divider()
-              this.SettingItemWithPicker('浮窗旋转速度', `${labelByFloatBtnSpeed(this.floatBtnRotationSpeed)}`, () => {
-                this.showFloatBtnSpeedPicker();
-              })
+              Row() {
+                Text('浮窗旋转速度')
+                  .fontSize(16)
+                  .fontColor($r('sys.color.font_primary'))
+                  .layoutWeight(1)
+                  .maxLines(1)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis })
+                Text(labelByFloatBtnSpeed(this.floatBtnRotationSpeed))
+                  .fontSize(14)
+                  .fontColor($r('sys.color.font_secondary'))
+                  .maxLines(1)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis })
+                  .margin({ right: 8 })
+                SymbolGlyph($r('sys.symbol.chevron_right'))
+                  .fontSize(14)
+                  .fontColor([$r('sys.color.icon_secondary')])
+                  .bindMenu(this.isFloatBtnSpeedMenuShow, this.FloatBtnSpeedMenuBuilder(), {
+                    onDisappear: () => { this.isFloatBtnSpeedMenuShow = false; }
+                  })
+              }
+              .width('100%')
+              .height(56)
+              .padding({ left: 16, right: 16 })
+              .alignItems(VerticalAlign.Center)
+              .onClick(() => { this.isFloatBtnSpeedMenuShow = true; })
             }
             .width('94%')
             .borderRadius(15)
@@ -2194,14 +2144,7 @@ export struct PersonalizationPage {
       .opacity(this.showContent ? 1 : 0)
       .translate({ y: this.showContent ? 0 : 20 })
       .animation({ duration: 300, curve: Curve.EaseOut, delay: 50 })
-      .bindSheet($$this.isFloatBtnSpeedSheetShow, this.FloatBtnSpeedSheetContent, {
-        height: '50%',
-        dragBar: false,
-        showClose: false,
-        backgroundColor: undefined,
-        preferType: SheetType.CENTER,
-        onDisappear: () => { this.isFloatBtnSpeedSheetShow = false; }
-      })
+      
     }
     .width('100%')
     .scrollBar(BarState.Off)
