@@ -8,7 +8,8 @@ import {
   SegmentButton,
   SegmentButtonOptions,
   SegmentButtonTextItem,
-  ItemRestriction
+  ItemRestriction,
+  uiMaterial
 } from '@kit.ArkUI';
 import { logInfo, logWarn, logError } from '../utils/Logger';
 import { FloatingVideoButton } from '../components/FloatingVideoButton';
@@ -80,6 +81,11 @@ struct FavoritesPage {
     backgroundBlurStyle: BlurStyle.BACKGROUND_THIN,
     selectedBackgroundColor: Color.White,
     textPadding: { top: 5, right: 5, bottom: 5, left: 5 }
+  });
+  @State myMaterial: uiMaterial.ImmersiveMaterial = new uiMaterial.ImmersiveMaterial({
+    style: uiMaterial.ImmersiveStyle.ULTRA_THIN,
+    interactive: true,
+    lightEffect: {}
   });
   @State folderList: FavFolderItem[] = [];
   @State isLoadingFolders: boolean = true;
@@ -550,21 +556,25 @@ struct FavoritesPage {
     }
   }
 
-  /** 标题栏居中内容（由 titleBar.content.stackBuilder 嵌入 HdsNavDestination，使用 SegmentButton + 系统材质） */
+  /** 标题栏居中内容（由 titleBar.content.stackBuilder 嵌入 HdsNavDestination，使用 SegmentButton + 系统材料 uiMaterial） */
   @Builder
   segmentButtonBuilder() {
     if (this.pageMode === PageMode.FOLDER_LIST) {
-      SegmentButton({
-        options: this.tabOptions,
-        selectedIndexes: $tabSelectedIndexes,
-        onItemClicked: (idx: number) => {
-          if (this.activeTabIndex !== idx) {
-            this.triggerHaptic();
-            this.onTabChange(idx);
+      Row() {
+        SegmentButton({
+          options: this.tabOptions,
+          selectedIndexes: $tabSelectedIndexes,
+          onItemClicked: (idx: number) => {
+            if (this.activeTabIndex !== idx) {
+              this.triggerHaptic();
+              this.onTabChange(idx);
+            }
           }
-        }
-      })
-        .width(150)
+        })
+          .width(150)
+      }
+      .borderRadius(20)
+      .systemMaterial(this.myMaterial)
     } else {
       Row() {
         Text(this.currentFolderTitle)
@@ -574,8 +584,9 @@ struct FavoritesPage {
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
       }
-      .width('100%')
-      .height('100%')
+      .padding({ left: 16, right: 16, top: 6, bottom: 6 })
+      .borderRadius(20)
+      .systemMaterial(this.myMaterial)
       .justifyContent(FlexAlign.Center)
       .alignItems(VerticalAlign.Center)
     }
