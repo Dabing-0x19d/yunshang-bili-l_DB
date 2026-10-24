@@ -1688,7 +1688,7 @@ struct UpSpacePage {
   dynDrawCard(item: SpaceDynamicItem) {
     Column() {
       if (item.text) {
-        this.dynTextSegmentsBuilder(item, true, 12)
+        this.dynTextSegmentsBuilder(item, false, 12)
       }
       if (item.images.length === 1) {
         // ⭐ 单图：普通图原比例完整显示；超长图（高/宽 > 16:9）用 3:4 竖版 + 顶部对齐 + 底部「长图」胶囊
