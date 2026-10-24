@@ -14,7 +14,7 @@ import {
   formatCount
 } from '../api/FavoritesApi';
 import { getUserInfo, prefetchVideoDetail } from '../api/BilibiliApi';
-import { hdsMaterial } from '@kit.UIDesignKit';
+import { HdsNavigation, HdsNavigationTitleMode, ScrollEffectType, hdsMaterial } from '@kit.UIDesignKit';
 import { deviceInfo } from '@kit.BasicServicesKit';
 import { motion } from '@kit.MultimodalAwarenessKit';
 import { HdsMiniBarButton } from '../components/infra/HdsMiniBarButton';
@@ -509,9 +509,48 @@ struct FavoritesPage {
     }
   }
 
-  /** 顶部悬浮区总高（列表顶部避让：状态栏 + 悬浮行 40 + 间距） */
-  private topInset(): number {
-    return (this.hideStatusBar ? 12 : (this.globalStatusBarHeight + 7)) + 40 + 8;
+  /** 标题栏居中内容（由 titleBar.content.stackBuilder 嵌入 HdsNavigation） */
+  @Builder
+  segmentButtonBuilder() {
+    if (this.pageMode === PageMode.FOLDER_LIST) {
+      Row() {
+        HdsMiniBarButton({
+          barWidth: 150,
+          barHeight: 40,
+          contentPadding: 4,
+          materialType: hdsMaterial.MaterialType.IMMERSIVE,
+          materialLevel: hdsMaterial.MaterialLevel.EXQUISITE,
+          barOverlap: true,
+          barPosition: BarPosition.End
+        }) {
+          Row() {
+            this.capsuleSegmentItem(0, '收藏夹')
+            this.capsuleSegmentItem(1, '订阅')
+          }
+          .padding({ left: 4, right: 4 })
+          .width('100%')
+          .height('100%')
+          .justifyContent(FlexAlign.Center)
+        }
+      }
+      .width('100%')
+      .height('100%')
+      .justifyContent(FlexAlign.Center)
+      .alignItems(VerticalAlign.Center)
+    } else {
+      Row() {
+        Text(this.currentFolderTitle)
+          .fontSize(16)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.isDarkMode ? '#FFFFFF' : '#000000')
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+      }
+      .width('100%')
+      .height('100%')
+      .justifyContent(FlexAlign.Center)
+      .alignItems(VerticalAlign.Center)
+    }
   }
 
   // ==================== Build ====================
@@ -520,117 +559,80 @@ struct FavoritesPage {
     Stack() {
       this.BackgroundLayer()
 
-      Column() {
-        if (this.pageMode === PageMode.FOLDER_LIST) {
-          if (!this.isLoggedIn) {
-            this.NotLoggedInView()
-          } else if (this.isLoadingFolders && this.folderList.length === 0) {
-            this.SkeletonView()
-          } else if (this.folderListError.length > 0 && this.folderList.length === 0) {
-            this.ErrorView()
-          } else if (this.folderList.length === 0) {
-            this.EmptyView()
+      HdsNavigation() {
+        Column() {
+          if (this.pageMode === PageMode.FOLDER_LIST) {
+            if (!this.isLoggedIn) {
+              this.NotLoggedInView()
+            } else if (this.isLoadingFolders && this.folderList.length === 0) {
+              this.SkeletonView()
+            } else if (this.folderListError.length > 0 && this.folderList.length === 0) {
+              this.ErrorView()
+            } else if (this.folderList.length === 0) {
+              this.EmptyView()
+            } else {
+              this.FolderContent()
+            }
           } else {
-            this.FolderContent()
+            this.FolderDetailView()
           }
-        } else {
-          this.FolderDetailView()
         }
+        .width('100%')
+        .height('100%')
+        .justifyContent(FlexAlign.Start)
+        .padding({ top: this.globalStatusBarHeight + 56 })
+        .opacity(this.contentOpacity)
+        .scale({ x: this.contentScale, y: this.contentScale })
       }
-      .width('100%')
-      .height('100%')
-      .justifyContent(FlexAlign.Start)
-      .padding({ top: this.topInset() })
-      .opacity(this.contentOpacity)
-      .scale({ x: this.contentScale, y: this.contentScale })
-      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
-
-      // ── 顶部悬浮层：返回钮（左上）+ 切换胶囊（水平居中，恒展开），悬浮于列表之上 ──
-      Row() {
-        // 返回按钮：悬浮圆钮（与首页搜索按钮同款 HdsMiniBarButton 材质）
-        // ⚠️ 包一层 Row（struct 组件尾闭包后直接链属性解析异常，Index 同款包裹写法）
-        Row() {
-          HdsMiniBarButton({
-            barWidth: 40,
-            barHeight: 40,
-            contentPadding: 4,
-            materialType: hdsMaterial.MaterialType.IMMERSIVE,
-            materialLevel: hdsMaterial.MaterialLevel.EXQUISITE,
-            barOverlap: true,
-            barPosition: BarPosition.End,
-            onButtonClick: (): void => {
+      .titleBar({
+        avoidLayoutSafeArea: true,
+        padding: { start: LengthMetrics.vp(16), end: LengthMetrics.vp(16) },
+        style: {
+          scrollEffectOpts: {
+            enableScrollEffect: true,
+            scrollEffectType: ScrollEffectType.GRADIENT_BLUR,
+            blurEffectiveStartOffset: LengthMetrics.vp(0),
+            blurEffectiveEndOffset: LengthMetrics.vp(20)
+          },
+          systemMaterialEffect: {
+            materialType: this.customMaterialType,
+            materialLevel: this.customMaterialLevel
+          },
+          originalStyle: {
+            backgroundStyle: {
+              backgroundColor: Color.Transparent
+            }
+          },
+          scrollEffectStyle: {
+            backgroundStyle: {
+              backgroundColor: this.isDarkMode ? 'rgba(30, 30, 30, 0.85)' : 'rgba(255, 255, 255, 0.85)'
+            }
+          }
+        },
+        content: {
+          title: {
+            mainTitle: ''
+          },
+          backIcon: {
+            action: (): void => {
               if (this.pageMode === PageMode.FOLDER_DETAIL) {
                 this.goBackToFolderList();
               } else {
                 router.back();
               }
             }
-          }) {
-            Image($r('app.media.ic_public_arrow_left_filled'))
-              .width(24).height(24)
-              .fillColor(this.isDarkMode ? '#FFFFFF' : '#000000')
+          },
+          stackBuilder: (): void => {
+            this.segmentButtonBuilder();
           }
         }
-
-        Blank()
-          .layoutWeight(1)
-
-        // 收藏夹/订阅切换胶囊（恒展开分段选择器，与粉丝关注页同款）
-        if (this.pageMode === PageMode.FOLDER_LIST) {
-          Row() {
-            HdsMiniBarButton({
-              barWidth: 150,
-              barHeight: 40,
-              contentPadding: 4,
-              materialType: hdsMaterial.MaterialType.IMMERSIVE,
-              materialLevel: hdsMaterial.MaterialLevel.EXQUISITE,
-              barOverlap: true,
-              barPosition: BarPosition.End
-            }) {
-              Row() {
-                this.capsuleSegmentItem(0, '收藏夹')
-                this.capsuleSegmentItem(1, '订阅')
-              }
-              .padding({ left: 4, right: 4 })
-              .width('100%')
-              .height('100%')
-              .justifyContent(FlexAlign.Center)
-            }
-          }
-        } else {
-          // 详情页胶囊标题
-          Row() {
-            HdsMiniBarButton({
-              barWidth: 180,
-              barHeight: 40,
-              contentPadding: 4,
-              materialType: hdsMaterial.MaterialType.IMMERSIVE,
-              materialLevel: hdsMaterial.MaterialLevel.EXQUISITE,
-              barOverlap: true,
-              barPosition: BarPosition.End
-            }) {
-              Text(this.currentFolderTitle)
-                .fontSize(14)
-                .fontWeight(FontWeight.Medium)
-                .fontColor(this.isDarkMode ? '#FFFFFF' : '#000000')
-                .maxLines(1)
-                .textOverflow({ overflow: TextOverflow.Ellipsis })
-                .padding({ left: 12, right: 12 })
-            }
-          }
-        }
-
-        Blank()
-          .layoutWeight(1)
-
-        // 右侧对称占位（与返回钮等宽）：保证胶囊按屏幕几何中心居中
-        Row()
-          .width(40)
-          .height(40)
-      }
+      })
+      .titleMode(HdsNavigationTitleMode.MINI)
+      .hideBackButton(false)
+      .mode(NavigationMode.Stack)
       .width('100%')
-      .alignItems(VerticalAlign.Center)
-      .padding({ left: 8, right: 8, top: this.hideStatusBar ? 12 : (this.globalStatusBarHeight + 7) })
+      .height('100%')
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
 
       this.FloatButtonLayer()
 
@@ -638,7 +640,6 @@ struct FavoritesPage {
     }
     .width('100%')
     .height('100%')
-    .alignContent(Alignment.TopStart)
     .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 
