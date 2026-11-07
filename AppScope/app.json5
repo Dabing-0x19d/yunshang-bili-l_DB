@@ -2,7 +2,7 @@
   "app": {
     "bundleName": "hi.bili.app",
     "vendor": "example",
-    "versionCode": 1000020,
+    "versionCode": 1000021,
     "versionName": "1.3.5",
     "buildVersion": "1",
     "icon": "$media:layered_image",

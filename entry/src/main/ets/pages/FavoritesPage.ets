@@ -102,6 +102,7 @@ struct FavoritesPage {
   @State isLoadingCovers: boolean = false;
   @State isLandscape: boolean = false;
   @State columnCount: number = 1;
+  @State folderColumnCount: number = 3;
 
   @State customMaterialLevel: hdsMaterial.MaterialLevel = hdsMaterial.MaterialLevel.ADAPTIVE;
   @State customMaterialType: hdsMaterial.MaterialType = hdsMaterial.MaterialType.IMMERSIVE;
@@ -117,6 +118,9 @@ struct FavoritesPage {
   @State hand: number = 0;
   @State dragOffsetX: number = 0;
   @State isDragging: boolean = false;
+
+  @State detailListEnter: boolean = false;
+  @State skeletonEnter: boolean = false;
 
   @State tabExpandAnimated: boolean = false;
 
@@ -176,6 +180,7 @@ struct FavoritesPage {
       const props = mainWindow.getWindowProperties();
       this.isLandscape = props.windowRect.width > props.windowRect.height;
       this.columnCount = this.isLandscape ? 2 : 1;
+      this.folderColumnCount = this.isLandscape ? 5 : 3;
     }
     const mediaQuery = this.getUIContext().getMediaQuery();
     this.landscapeListener = mediaQuery.matchMediaSync('(orientation: landscape)');
@@ -184,6 +189,7 @@ struct FavoritesPage {
       if (this.isLandscape !== newIsLandscape) {
         this.isLandscape = newIsLandscape;
         this.columnCount = this.isLandscape ? 2 : 1;
+        this.folderColumnCount = this.isLandscape ? 5 : 3;
         this.maxFloatBtnBottom = this.isLandscape ? 392 : 592;
       }
     });
@@ -336,7 +342,7 @@ struct FavoritesPage {
   private async loadAllFolderCovers(): Promise<void> {
     if (this.isLoadingCovers) return;
     this.isLoadingCovers = true;
-    const maxFolders = Math.min(this.folderList.length, 6);
+    const maxFolders = Math.min(this.folderList.length, 18);
     for (let fi = 0; fi < maxFolders; fi++) {
       const folder = this.folderList[fi];
       if (folder.covers && folder.covers.length >= 3) {
@@ -344,7 +350,7 @@ struct FavoritesPage {
       }
       try {
         if (fi > 0) {
-          await new Promise<void>((resolve: Function) => setTimeout(resolve, 300));
+          await new Promise<void>((resolve: Function) => setTimeout(resolve, 150));
         }
         const result = await getFavFolderResources(folder.id, 1, 3);
         if (result && result.medias && result.medias.length > 0) {
@@ -384,7 +390,12 @@ struct FavoritesPage {
 
   private async onTabChange(index: number): Promise<void> {
     if (this.pageMode === PageMode.FOLDER_DETAIL) {
-      this.pageMode = PageMode.FOLDER_LIST;
+      animateTo({
+        duration: this.da ? 0 : 300,
+        curve: curves.cubicBezierCurve(0.2, 0.0, 0.2, 1.0)
+      }, () => {
+        this.pageMode = PageMode.FOLDER_LIST;
+      });
     }
     this.activeTabIndex = index;
     this.tabSelectedIndexes = [index];
@@ -397,8 +408,21 @@ struct FavoritesPage {
     this.resourceList = [];
     this.resourcePage = 1;
     this.resourceHasMore = true;
-    this.pageMode = PageMode.FOLDER_DETAIL;
+    this.detailListEnter = false;
+    this.skeletonEnter = false;
+    animateTo({
+      duration: this.da ? 0 : 320,
+      curve: curves.cubicBezierCurve(0.2, 0.0, 0.2, 1.0)
+    }, () => {
+      this.pageMode = PageMode.FOLDER_DETAIL;
+    });
+    setTimeout(() => {
+      this.skeletonEnter = true;
+    }, 30);
     await this.loadFolderResources(true);
+    setTimeout(() => {
+      this.detailListEnter = true;
+    }, 40);
   }
 
   private async loadFolderResources(isRefresh: boolean): Promise<void> {
@@ -453,7 +477,14 @@ struct FavoritesPage {
   }
 
   private goBackToFolderList(): void {
-    this.pageMode = PageMode.FOLDER_LIST;
+    this.detailListEnter = false;
+    this.skeletonEnter = false;
+    animateTo({
+      duration: this.da ? 0 : 300,
+      curve: curves.cubicBezierCurve(0.2, 0.0, 0.2, 1.0)
+    }, () => {
+      this.pageMode = PageMode.FOLDER_LIST;
+    });
     this.currentFolderId = 0;
     this.currentFolderTitle = '';
     this.resourceList = [];
@@ -492,7 +523,7 @@ struct FavoritesPage {
       case 'mint': return '#E0F7F0';
       case 'blue': return '#1E2A4F';
       case 'custom_color': return this.wallpaperColor;
-      default: return this.isDarkMode ? '#121212' : '#FFFFFF';
+      default: return this.isDarkMode ? '#121212' : '#F7F6F2';
     }
   }
 
@@ -638,26 +669,59 @@ struct FavoritesPage {
       Stack() {
         this.BackgroundLayer()
 
-        Column() {
+        Stack({ alignContent: Alignment.TopStart }) {
           if (this.pageMode === PageMode.FOLDER_LIST) {
-            if (!this.isLoggedIn) {
-              this.NotLoggedInView()
-            } else if (this.isLoadingFolders && this.folderList.length === 0) {
-              this.SkeletonView()
-            } else if (this.folderListError.length > 0 && this.folderList.length === 0) {
-              this.ErrorView()
-            } else if (this.folderList.length === 0) {
-              this.EmptyView()
-            } else {
-              this.FolderContent()
+            Column() {
+              if (!this.isLoggedIn) {
+                this.NotLoggedInView()
+              } else if (this.isLoadingFolders && this.folderList.length === 0) {
+                this.SkeletonView()
+              } else if (this.folderListError.length > 0 && this.folderList.length === 0) {
+                this.ErrorView()
+              } else if (this.folderList.length === 0) {
+                this.EmptyView()
+              } else {
+                this.FolderContent()
+              }
             }
+            .width('100%')
+            .height('100%')
+            .renderGroup(true)
+            .transition(
+              TransitionEffect.asymmetric(
+                // 出现（返回列表）：淡入 + 缩放恢复
+                TransitionEffect.OPACITY
+                  .combine(TransitionEffect.scale({ x: 0.94, y: 0.94 }))
+                  .animation({ duration: this.da ? 0 : 320, curve: curves.cubicBezierCurve(0.2, 0.0, 0.2, 1.0) }),
+                // 消失（进入详情）：文件夹缩小 + 淡出 + 微向左移
+                TransitionEffect.OPACITY
+                  .combine(TransitionEffect.scale({ x: 0.90, y: 0.90 }))
+                  .combine(TransitionEffect.translate({ x: -40 }))
+                  .animation({ duration: this.da ? 0 : 260, curve: Curve.FastOutLinearIn })
+              )
+            )
           } else {
-            this.FolderDetailView()
+            Column() {
+              this.FolderDetailView()
+            }
+            .width('100%')
+            .height('100%')
+            .renderGroup(true)
+            .transition(
+              TransitionEffect.asymmetric(
+                // 容器层轻量淡入，让内部列表卡片去执行一个接一个滑入动效
+                TransitionEffect.OPACITY
+                  .animation({ duration: this.da ? 0 : 220, curve: Curve.EaseOut }),
+                // 返回时：整页向右侧滑出 + 淡出
+                TransitionEffect.OPACITY
+                  .combine(TransitionEffect.translate({ x: 60 }))
+                  .animation({ duration: this.da ? 0 : 260, curve: Curve.FastOutLinearIn })
+              )
+            )
           }
         }
         .width('100%')
         .height('100%')
-        .justifyContent(FlexAlign.Start)
         .opacity(this.contentOpacity)
         .scale({ x: this.contentScale, y: this.contentScale })
         .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
@@ -901,60 +965,61 @@ struct FavoritesPage {
   @Builder
   SkeletonView() {
     WaterFlow() {
-      ForEach([0, 1, 2, 3], (idx: number) => {
+      ForEach([0, 1, 2, 3, 4, 5, 6, 7, 8], (idx: number) => {
         FlowItem() {
           this.SkeletonFolderCard()
         }
         .width('100%')
-        .margin({ top: idx < this.columnCount ? this.topInset() : 0 })
+        .margin({ top: idx < this.folderColumnCount ? this.topInset() : 0 })
       })
     }
-    .columnsTemplate(this.columnCount === 2 ? '1fr 1fr' : '1fr')
-    .columnsGap(this.cardListMargin)
-    .rowsGap(this.cardListMargin)
+    .columnsTemplate(this.isLandscape ? '1fr 1fr 1fr 1fr 1fr' : '1fr 1fr 1fr')
+    .columnsGap(10)
+    .rowsGap(20)
     .width('100%')
     .layoutWeight(1)
-    .padding({ left: 12, right: 12, bottom: 0 })
+    .padding({ left: 14, right: 14, bottom: 20 })
     .backgroundColor('transparent')
     .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
   }
 
   @Builder
   SkeletonFolderCard() {
-    Row() {
-      Column() { Blank() }
-      .width(160)
-      .height(120)
-      .backgroundColor('#E0E0E0')
-      .borderRadius(20)
-      .margin({ right: 16 })
+    Column() {
+      Stack({ alignContent: Alignment.Bottom }) {
+        Column()
+          .width(54)
+          .height(70)
+          .borderRadius(5)
+          .backgroundColor(this.isDarkMode ? '#333333' : '#EAE8E2')
+          .offset({ x: 0, y: -8 })
 
-      Column() {
-        Column() { Blank() }
-        .width('80%')
-        .height(16)
-        .borderRadius(4)
-        .margin({ bottom: 8 })
-        .backgroundColor('#E0E0E0')
-
-        Column() { Blank() }
-        .width(60)
-        .height(12)
-        .borderRadius(4)
-        .backgroundColor('#E0E0E0')
+        Column()
+          .width('96%')
+          .height(50)
+          .borderRadius({ topLeft: 8, topRight: 8, bottomLeft: 16, bottomRight: 16 })
+          .backgroundColor(this.isDarkMode ? '#2A2A2A' : '#F4F2EC')
       }
-      .layoutWeight(1)
-      .height('100%')
-      .justifyContent(FlexAlign.End)
-      .alignItems(HorizontalAlign.Start)
+      .width('100%')
+      .height(96)
+
+      Column()
+        .width('70%')
+        .height(13)
+        .borderRadius(4)
+        .backgroundColor(this.isDarkMode ? '#333333' : '#EAE8E2')
+        .margin({ top: 8 })
+
+      Column()
+        .width('40%')
+        .height(10)
+        .borderRadius(3)
+        .backgroundColor(this.isDarkMode ? '#2A2A2A' : '#F0EEE8')
+        .margin({ top: 4 })
     }
-    .alignItems(VerticalAlign.Center)
-    .height(168)
-    .backgroundColor(this.isDarkMode ? '#2C2C2C' : '#FFFFFF')
-    .borderRadius(20)
-    .padding({ left: 18, right: 20, top: 15, bottom: 15 })
-    .clip(true)
-    .opacity(0.35)
+    .width('100%')
+    .alignItems(HorizontalAlign.Center)
+    .opacity(0.5)
     .animation(this.da ? { duration: 0 } : { duration: 1000, curve: Curve.Ease, iterations: -1, playMode: PlayMode.Alternate })
   }
 
@@ -1006,19 +1071,18 @@ struct FavoritesPage {
               this.FolderCard(item)
             }
             .width('100%')
-            .margin({ top: index < this.columnCount ? this.topInset() : 0 })
-            .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.96 })
+            .margin({ top: index < this.folderColumnCount ? this.topInset() : 0 })
           }, (item: FavFolderItem) => String(item.id))
         }
-        .columnsTemplate(this.columnCount === 2 ? '1fr 1fr' : '1fr')
-        .columnsGap(this.cardListMargin)
-        .rowsGap(this.cardListMargin + 8)
+        .columnsTemplate(this.isLandscape ? '1fr 1fr 1fr 1fr 1fr' : '1fr 1fr 1fr')
+        .columnsGap(10)
+        .rowsGap(20)
         .width('100%')
         .layoutWeight(1)
         .scrollBar(BarState.Off)
         .cachedCount(30)
         .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
-        .padding({ left: 12, right: 12, bottom: 0 })
+        .padding({ left: 14, right: 14, bottom: 24 })
         .backgroundColor('transparent')
         .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
         .opacity(this.isContentReady ? 1 : 0)
@@ -1041,91 +1105,137 @@ struct FavoritesPage {
     .height('100%')
   }
 
-  // ==================== 收藏夹卡片 ====================
+  // ==================== 收藏夹卡片（实体插袋文件夹设计） ====================
 
   @Builder
   FolderCard(folder: FavFolderItem) {
-    Row() {
-      Stack() {
+    Column() {
+      // 实体插袋与照片层叠区域
+      Stack({ alignContent: Alignment.Bottom }) {
+        // 1. 照片叠放层
         if (folder.cover) {
+          // 照片 2 (最底层左偏)
           Image(this.getCoverByIndex(folder, 2))
-            .width(160)
-            .height(120)
-            .borderRadius(this.cardListBorderRadius)
+            .width(52)
+            .height(68)
+            .borderRadius(5)
             .objectFit(ImageFit.Cover)
-            .border({ width: 1, color: this.isDarkMode ? '#33FFFFFF' : '#33000000' })
-            .offset({ x: 24, y: 18 })
-            .opacity(0.20)
+            .border({ width: 2, color: this.isDarkMode ? '#3A3A3C' : '#FFFFFF' })
+            .shadow({
+              radius: 6,
+              color: this.isDarkMode ? 'rgba(0, 0, 0, 0.45)' : 'rgba(0, 0, 0, 0.12)',
+              offsetY: 2
+            })
+            .rotate({ angle: -9 })
+            .offset({ x: -14, y: -4 })
 
+          // 照片 1 (右偏)
           Image(this.getCoverByIndex(folder, 1))
-            .width(160)
-            .height(120)
-            .borderRadius(this.cardListBorderRadius)
+            .width(54)
+            .height(70)
+            .borderRadius(5)
             .objectFit(ImageFit.Cover)
-            .border({ width: 1, color: this.isDarkMode ? '#55FFFFFF' : '#55000000' })
-            .offset({ x: 12, y: 9 })
-            .opacity(0.50)
+            .border({ width: 2, color: this.isDarkMode ? '#3A3A3C' : '#FFFFFF' })
+            .shadow({
+              radius: 6,
+              color: this.isDarkMode ? 'rgba(0, 0, 0, 0.45)' : 'rgba(0, 0, 0, 0.12)',
+              offsetY: 2
+            })
+            .rotate({ angle: 8 })
+            .offset({ x: 13, y: -7 })
 
+          // 照片 0 (居中主照片)
           Image(this.getCoverByIndex(folder, 0))
-            .width(160)
-            .height(120)
-            .borderRadius(this.cardListBorderRadius)
+            .width(55)
+            .height(72)
+            .borderRadius(5)
             .objectFit(ImageFit.Cover)
+            .border({ width: 2, color: this.isDarkMode ? '#3A3A3C' : '#FFFFFF' })
+            .shadow({
+              radius: 8,
+              color: this.isDarkMode ? 'rgba(0, 0, 0, 0.5)' : 'rgba(0, 0, 0, 0.14)',
+              offsetY: 3
+            })
+            .rotate({ angle: 0 })
+            .offset({ x: 0, y: -10 })
         } else {
-          Text('📁')
-            .fontSize(36)
-            .opacity(0.5)
+          // 空文件夹占位卡片 (拟物白卡纸)
+          Column() {
+            Text('📁')
+              .fontSize(22)
+              .opacity(0.4)
+          }
+          .width(52)
+          .height(68)
+          .justifyContent(FlexAlign.Center)
+          .alignItems(HorizontalAlign.Center)
+          .backgroundColor(this.isDarkMode ? '#2C2C2E' : '#EFECE6')
+          .borderRadius(5)
+          .border({ width: 1.5, color: this.isDarkMode ? '#3A3A3C' : '#E0DDD5' })
+          .offset({ x: 0, y: -6 })
         }
+
+        // 2. 前置半透明插袋/纸袋袋身 (Translucent Frosted Pocket)
+        Stack({ alignContent: Alignment.Top }) {
+          // 袋身底色与毛玻璃
+          Column()
+            .width('100%')
+            .height(50)
+            .backgroundColor(this.isDarkMode ? 'rgba(45, 45, 50, 0.82)' : 'rgba(255, 255, 255, 0.82)')
+            .backgroundBlurStyle(BlurStyle.Thin)
+            .borderRadius({
+              topLeft: 8,
+              topRight: 8,
+              bottomLeft: 16,
+              bottomRight: 16
+            })
+            .border({
+              width: 1,
+              color: this.isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.95)'
+            })
+            .shadow({
+              radius: 8,
+              color: this.isDarkMode ? 'rgba(0, 0, 0, 0.3)' : 'rgba(0, 0, 0, 0.05)',
+              offsetY: 3
+            })
+
+          // 口袋上沿微弧切口 (实体取物口细节)
+          Row()
+            .width(28)
+            .height(5)
+            .backgroundColor(this.isDarkMode ? 'rgba(0, 0, 0, 0.35)' : 'rgba(224, 220, 210, 0.6)')
+            .borderRadius({ bottomLeft: 6, bottomRight: 6 })
+        }
+        .width('96%')
+        .height(50)
       }
-      .width(160)
-      .height(120)
-      .margin({ right: 24 })
+      .width('100%')
+      .height(96)
 
-      Column() {
-        Blank()
-          .layoutWeight(1)
-        Text(folder.title)
-          .fontSize(16)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.isDarkMode ? '#E5E5E5' : '#333333')
-          .maxLines(2)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-          .lineHeight(22)
-          .width('100%')
-
-        Row() {
-          Text(String(folder.media_count) + ' 个内容')
-            .fontSize(13)
-            .fontColor(this.isDarkMode ? '#999999' : '#999999')
-        }
+      // 3. 标题与数量信息（克制极简排版）
+      Text(folder.title)
+        .fontSize(13.5)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(this.isDarkMode ? '#F0F0F0' : '#1C1C1E')
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+        .textAlign(TextAlign.Center)
         .width('100%')
-        .margin({ top: 6 })
-      }
-      .layoutWeight(1)
-      .alignItems(HorizontalAlign.Start)
-      .margin({ top: 100 })
+        .margin({ top: 7 })
+
+      Text(`${folder.media_count} 内容`)
+        .fontSize(11)
+        .fontColor(this.isDarkMode ? '#888888' : '#9C9B97')
+        .textAlign(TextAlign.Center)
+        .margin({ top: 2 })
     }
     .width('100%')
-    .height(168)
-    .padding({ left: 18, right: 20, top: 15, bottom: 33 })
-    .backgroundColor(this.getCardBgColor())
-    .border({
-      width: this.cardTransparentStyle ? this.cardBorderWidth : 0,
-      color: this.getCardBorderColor()
-    })
-    .borderRadius(this.cardListBorderRadius)
-    .clip(true)
-    .shadow({
-      radius: 16,
-      color: this.isDarkMode ? 'rgba(0, 0, 0, 0.3)' : 'rgba(0, 0, 0, 0.08)',
-      offsetX: 0,
-      offsetY: 2
-    })
+    .alignItems(HorizontalAlign.Center)
     .onClick(() => {
       this.triggerHaptic();
       this.onFolderClick(folder);
     })
-    .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.96 })
+    .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.94 })
   }
 
   // ==================== 收藏夹详情（视频列表） ====================
@@ -1141,6 +1251,17 @@ struct FavoritesPage {
             }
             .width('100%')
             .margin({ top: idx < this.columnCount ? this.topInset() : 0 })
+            .renderGroup(true)
+            .opacity(this.skeletonEnter ? 0.35 : 0)
+            .translate({
+              x: this.skeletonEnter ? 0 : 40,
+              y: this.skeletonEnter ? 0 : 10
+            })
+            .animation(this.da ? { duration: 0 } : {
+              duration: 360,
+              curve: curves.cubicBezierCurve(0.2, 0.0, 0.2, 1.0),
+              delay: idx * 45
+            })
           })
         }
         .columnsTemplate(this.columnCount === 2 ? '1fr 1fr' : '1fr')
@@ -1171,6 +1292,17 @@ struct FavoritesPage {
               .width('100%')
               .margin({ top: index < this.columnCount ? this.topInset() : 0 })
               .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.95 })
+              .renderGroup(true)
+              .opacity(this.detailListEnter ? 1 : 0)
+              .translate({
+                x: this.detailListEnter ? 0 : 50,
+                y: this.detailListEnter ? 0 : 12
+              })
+              .animation(this.da ? { duration: 0 } : {
+                duration: 400,
+                curve: curves.cubicBezierCurve(0.25, 0.1, 0.25, 1.0),
+                delay: Math.min(index, 7) * 55
+              })
             }, (item: FavResourceItem) => String(item.id))
 
             if (this.resourceHasMore) {
